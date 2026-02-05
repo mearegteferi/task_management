@@ -1,22 +1,32 @@
-# app/schemas/task.py
-from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Optional, List
 from datetime import datetime
+from app.models.task import TaskStatus
+from .tag import TagResponse, TagCreate
 
-# Shared properties
 class TaskBase(BaseModel):
-    title: str
+    title: str = Field(..., min_length=3, max_length=200)
     description: Optional[str] = None
-    is_completed: bool = False
+    status: TaskStatus = TaskStatus.TODO
+    priority: int = Field(1, ge=1, le=3)
+    due_date: Optional[datetime] = None
 
-# Properties to receive via API on creation
 class TaskCreate(TaskBase):
-    pass
+    # User can optionally create tags while creating a task
+    tags: List[TagCreate] = []
 
-# Properties to return via API
+class TaskUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=3, max_length=200)
+    description: Optional[str] = None
+    status: Optional[TaskStatus] = None
+    priority: Optional[int] = Field(None, ge=1, le=3)
+    due_date: Optional[datetime] = None
+    tags: Optional[List[TagCreate]] = None
+
 class TaskResponse(TaskBase):
     id: int
-    owner_id: int
     created_at: datetime
+    updated_at: Optional[datetime]
+    tags: List[TagResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
