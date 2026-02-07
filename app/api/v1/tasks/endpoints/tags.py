@@ -3,8 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from app.db.session import get_db
-from app.schemas.tag import TagResponse
-from app.services.tag_service import TagService
+from app.api.v1.tasks.schemas import TagResponse
+from app.api.v1.tasks.services.tag_service import TagService
 
 router = APIRouter()
 

@@ -3,9 +3,9 @@ from sqlalchemy import select, or_
 from typing import Optional, List
 from datetime import datetime
 
-from app.api.v1.auth.models import Task, TaskStatus
-from app.api.v1.auth.schemas import TaskCreate, TaskUpdate
-from app.services.tag_service import TagService
+from app.api.v1.tasks.models import Task, TaskStatus
+from app.api.v1.tasks.schemas import TaskCreate, TaskUpdate
+from app.api.v1.tasks.services.tag_service import TagService
 
 
 class TaskService:

@@ -1,8 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import datetime
-from app.api.v1.auth.models import TaskStatus
-from ....schemas.tag import TagResponse, TagCreate
+from app.api.v1.tasks.models import TaskStatus
 
 class TaskBase(BaseModel):
     title: str = Field(..., min_length=3, max_length=200)

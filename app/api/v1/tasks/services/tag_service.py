@@ -2,8 +2,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 
-from app.models.tag import Tag
-from app.schemas.tag import TagCreate
+from app.api.v1.tasks.models import Tag
+from app.api.v1.tasks.schemas import TagCreate
 
 
 class TagService:

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import tasks, tags
+from app.api.v1.tasks.endpoints import tasks, tags
 
 api_router = APIRouter()
 
