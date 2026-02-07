@@ -3,8 +3,8 @@ from sqlalchemy import select, or_
 from typing import Optional, List
 from datetime import datetime
 
-from app.models.task import Task, TaskStatus
-from app.schemas.task import TaskCreate, TaskUpdate
+from app.api.v1.auth.models import Task, TaskStatus
+from app.api.v1.auth.schemas import TaskCreate, TaskUpdate
 from app.services.tag_service import TagService
 
 

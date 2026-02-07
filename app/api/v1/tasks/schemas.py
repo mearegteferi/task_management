@@ -1,8 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import datetime
-from app.models.task import TaskStatus
-from .tag import TagResponse, TagCreate
+from app.api.v1.auth.models import TaskStatus
+from ....schemas.tag import TagResponse, TagCreate
 
 class TaskBase(BaseModel):
     title: str = Field(..., min_length=3, max_length=200)
@@ -29,4 +29,16 @@ class TaskResponse(TaskBase):
     updated_at: Optional[datetime]
     tags: List[TagResponse] = []
 
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TagBase(BaseModel):
+    name: str
+    color: str = "#FFFFFF"
+
+class TagCreate(TagBase):
+    pass
+
+class TagResponse(TagBase):
+    id: int
     model_config = ConfigDict(from_attributes=True)
