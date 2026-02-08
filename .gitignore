@@ -1,0 +1,9 @@
+*.pyo
+.python-version
+__pycache__/
+
+.venv/
+.env
+
+.vscode/
+.idea/
