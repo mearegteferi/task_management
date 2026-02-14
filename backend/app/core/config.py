@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         # Construct Async Postgres URL
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
+
+    BACKEND_CORS_ORIGINS: list[str] = []
+    FRONTEND_HOST: str = "http://localhost:3000"
+
+    @property
+    def all_cors_origins(self) -> list[str]:
+        return self.BACKEND_CORS_ORIGINS + [self.FRONTEND_HOST]
+
     
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
