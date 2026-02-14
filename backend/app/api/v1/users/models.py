@@ -1,7 +1,10 @@
 import uuid
+from typing import List
 from datetime import datetime, timezone
+
 from sqlalchemy import String, Boolean, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 
@@ -33,4 +36,8 @@ class User(Base):
         DateTime(timezone=True), 
         default=get_datetime_utc,
         nullable=True
+    )
+    tasks: Mapped[List["app.api.v1.tasks.models.Task"]] = relationship(
+        "app.api.v1.tasks.models.Task",
+        back_populates="owner"
     )

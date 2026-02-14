@@ -17,8 +17,8 @@ from app.core.config import settings
 from app.db.base import Base
 
 # IMPORT ALL MODELS HERE
-from app.api.v1.auth.models import Task
-from app.models.tag import Tag
+from app.api.v1.users.models import User
+from app.api.v1.tasks.models import Tag, Task
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

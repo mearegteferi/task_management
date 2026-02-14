@@ -46,12 +46,21 @@ async def get_user_by_email(*, session: AsyncSession, email: str) -> User | None
     result = await session.execute(statement)
     return result.scalars().first()
 
+DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$MjQyZWE1MzBjYjJlZTI0Yw$YTU4NGM5ZTZmYjE2NzZlZjY0ZWY3ZGRkY2U2OWFjNjk"
+
 async def authenticate(
     *, session: AsyncSession, email: str, password: str
 ) -> User | None:
     db_user = await get_user_by_email(session=session, email=email)
     if not db_user:
+        verify_password(password, DUMMY_HASH)
         return None
-    if not verify_password(password, db_user.hashed_password):
+    verified, updated_password_hash = verify_password(password, db_user.hashed_password)
+    if not verified:
         return None
+    if updated_password_hash:
+        db_user.hashed_password = updated_password_hash
+        session.add(db_user)
+        await session.commit()
+        await session.refresh(db_user)
     return db_user

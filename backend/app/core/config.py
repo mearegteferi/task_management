@@ -10,9 +10,10 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "TaskMaster API"
     API_V1_STR: str = "/api/v1"
     
-    SECRET_KEY: str = secrets.token_urlsafe(32)
-    # 60 minutes * 24 hours * 8 days = 8 days
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
     # Database
     POSTGRES_USER: str
@@ -25,7 +26,7 @@ class Settings(BaseSettings):
         # Construct Async Postgres URL
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
     
-        SMTP_TLS: bool = True
+    SMTP_TLS: bool = True
     SMTP_SSL: bool = False
     SMTP_PORT: int = 587
     SMTP_HOST: str | None = None

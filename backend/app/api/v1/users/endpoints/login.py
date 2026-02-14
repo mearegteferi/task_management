@@ -8,7 +8,7 @@ from app.api.v1.users import services
 from app.api.v1.users.dependencies import SessionDep
 from app.core import security
 from app.core.config import settings
-from app.api.v1.users.schemas import Message, NewPassword, Token, UserPublic
+from app.api.v1.users.schemas import Message, NewPassword, Token, UserPublic, TokenRefresh
 from app.api.v1.users.utils import (
     generate_password_reset_token,
     generate_reset_password_email,
@@ -18,10 +18,13 @@ from app.api.v1.users.utils import (
 
 router = APIRouter(tags=["login"])
 
-@router.post("/login/access-token")
+@router.post("/login/access-token", response_model=Token)
 async def login_access_token(
-    session: SessionDep, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+        session: SessionDep, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 ) -> Token:
+    """
+    OAuth2 compatible token login, get an access token for future requests.
+    """
     user = await services.authenticate(
         session=session, email=form_data.username, password=form_data.password
     )
@@ -29,11 +32,29 @@ async def login_access_token(
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     elif not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    # Generate both tokens
     return Token(
-        access_token=security.create_access_token(
-            user.id, expires_delta=access_token_expires
-        )
+        access_token=security.create_access_token(user.id),
+        refresh_token=security.create_refresh_token(user.id)
+    )
+
+
+@router.post("/refresh-token", response_model=Token)
+async def refresh_token(
+        session: SessionDep,
+        body: TokenRefresh,  # Expects {"refresh_token": "..."}
+) -> Token:
+    """
+    Rotate tokens: Validate refresh token, issue new access AND refresh tokens.
+    """
+    # 1. Validate the refresh token (checks signature, expiry, and type="refresh")
+    user = await get_current_user_refresh(token=body.refresh_token, session=session)
+
+    # 2. Issue new tokens (Token Rotation)
+    return Token(
+        access_token=security.create_access_token(user.id),
+        refresh_token=security.create_refresh_token(user.id)
     )
 
 @router.post("/password-recovery/{email}")

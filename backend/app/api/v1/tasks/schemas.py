@@ -1,6 +1,8 @@
-from pydantic import BaseModel, ConfigDict, Field
+import uuid
 from typing import Optional, List
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
 from app.api.v1.tasks.models import TaskStatus
 
 class TaskBase(BaseModel):
@@ -26,6 +28,7 @@ class TaskResponse(TaskBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime]
+    owner_id: uuid.UUID
     tags: List[TagResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

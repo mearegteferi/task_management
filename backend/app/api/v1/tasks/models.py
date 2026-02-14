@@ -1,4 +1,4 @@
-import enum
+import enum, uuid
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy import String, Enum, Table, Column, ForeignKey, Integer, DateTime, func, Boolean
@@ -60,10 +60,18 @@ class Task(Base, TimestampMixin, SoftDeleteMixin):
         Enum(TaskStatus), default=TaskStatus.TODO)
     priority: Mapped[int] = mapped_column(default=1)  # 1=Low, 3=High
     due_date: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False
+    )
+    owner: Mapped["app.api.v1.users.models.User"] = relationship(
+        "app.api.v1.users.models.User",
+        back_populates="tasks"
+    )
 
     # Relationship
-    tags: Mapped[List["app.models.tag.Tag"]] = relationship(
-        "app.models.tag.Tag",
+    tags: Mapped[List["app.api.v1.tasks.models.Tag"]] = relationship(
+        "app.api.v1.tasks.models.Tag",
         secondary=task_tags,
         back_populates="tasks",
         lazy="selectin"  # Optimization for async
