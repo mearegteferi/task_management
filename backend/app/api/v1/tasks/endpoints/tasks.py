@@ -1,115 +1,70 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import Any
 
-from app.db.session import get_db
-from app.api.v1.tasks.models import TaskStatus
-from app.api.v1.tasks.schemas import TaskCreate, TaskResponse, TaskUpdate
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import CurrentUser, get_db
+from app.api.v1.tasks import schemas
+
+# Adjust this import to wherever you placed the service file above
 from app.api.v1.tasks.services.task_service import TaskService
-# Import the CurrentUser dependency you created
-from app.api.v1.users.dependencies import CurrentUser, get_db
 
 router = APIRouter()
 
 
-@router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
+@router.post('/projects/{project_id}/tasks/', response_model=schemas.TaskResponse)
 async def create_task(
-        task_in: TaskCreate,
-        current_user: CurrentUser,  # <--- 1. Inject User
-        db: AsyncSession = Depends(get_db)
-):
+    project_id: int,
+    task_in: schemas.TaskCreate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
     """
-    Create a new task for the current user.
+    Create a new task for a specific project.
     """
-    # 2. Pass user ID to service
-    return await TaskService.create(db, task_in, owner_id=current_user.id)
-
-
-@router.get("/", response_model=List[TaskResponse])
-async def read_tasks(
-        current_user: CurrentUser,  # <--- Inject User
-        skip: int = Query(0, ge=0),
-        limit: int = Query(100, ge=1),
-        status: Optional[TaskStatus] = None,
-        priority: Optional[int] = None,
-        search: Optional[str] = None,
-        db: AsyncSession = Depends(get_db)
-):
-    """
-    Get current user's tasks.
-    """
-    return await TaskService.get_multi(
-        db,
-        owner_id=current_user.id,  # <--- Filter by user ID
-        skip=skip,
-        limit=limit,
-        status=status,
-        priority=priority,
-        search=search
+    return await TaskService.create_task(
+        db=db, project_id=project_id, task_in=task_in, user_id=current_user.id
     )
 
 
-@router.get("/{task_id}", response_model=TaskResponse)
-async def read_task(
-        task_id: int,
-        current_user: CurrentUser,  # <--- Inject User
-        db: AsyncSession = Depends(get_db)
-):
-    # Pass owner_id to ensure they don't see other people's tasks
-    task = await TaskService.get_one(db, task_id, owner_id=current_user.id)
-
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found"
-        )
-    return task
+@router.get('/projects/{project_id}/tasks/', response_model=list[schemas.TaskResponse])
+async def read_tasks(
+    project_id: int,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Get all tasks for a project.
+    """
+    return await TaskService.get_tasks(
+        db=db, project_id=project_id, user_id=current_user.id
+    )
 
 
-@router.patch("/{task_id}", response_model=TaskResponse)
+@router.patch('/tasks/{task_id}', response_model=schemas.TaskResponse)
 async def update_task(
-        task_id: int,
-        task_in: TaskUpdate,
-        current_user: CurrentUser,  # <--- Inject User
-        db: AsyncSession = Depends(get_db)
-):
-    # First, verify existence and ownership
-    task = await TaskService.get_one(db, task_id, owner_id=current_user.id)
+    task_id: int,
+    task_in: schemas.TaskUpdate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Update a task (e.g. toggle completion).
+    """
+    return await TaskService.update_task(
+        db=db, task_id=task_id, task_in=task_in, user_id=current_user.id
+    )
 
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
 
-    return await TaskService.update(db, task, task_in)
-
-
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/tasks/{task_id}')
 async def delete_task(
-        task_id: int,
-        current_user: CurrentUser,  # <--- Inject User
-        db: AsyncSession = Depends(get_db)
-):
-    # Verify ownership before deleting
-    task = await TaskService.get_one(db, task_id, owner_id=current_user.id)
-
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    await TaskService.delete(db, task)
-    return None
-
-
-@router.post("/{task_id}/restore", response_model=TaskResponse)
-async def restore_task(
-        task_id: int,
-        current_user: CurrentUser,  # <--- Inject User
-        db: AsyncSession = Depends(get_db)
-):
-    # Verify ownership before restoring
-    task = await TaskService.restore(db, task_id, owner_id=current_user.id)
-
-    if not task:
-        raise HTTPException(
-            status_code=404,
-            detail="Task not found in deleted items"
-        )
-    return task
+    task_id: int,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Delete a task.
+    """
+    return await TaskService.delete_task(
+        db=db, task_id=task_id, user_id=current_user.id
+    )

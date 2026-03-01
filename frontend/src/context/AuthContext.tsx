@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Cookies.remove("access_token");
         Cookies.remove("refresh_token");
         setUser(null);
-        router.push("/login");
+        window.location.href = "/login";
     };
 
     return (

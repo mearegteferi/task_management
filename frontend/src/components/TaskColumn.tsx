@@ -2,15 +2,25 @@
 
 import React from "react";
 import { Plus } from "lucide-react";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useDroppable } from "@dnd-kit/core";
+import { Task } from "@/types";
+import TaskCard from "./TaskCard";
 
 interface TaskColumnProps {
+    id: string; // "todo", "in_progress", "done"
     title: string;
     count: number;
     color: string;
-    children: React.ReactNode;
+    tasks: Task[];
+    onTaskClick: (task: Task) => void;
 }
 
-export default function TaskColumn({ title, count, color, children }: TaskColumnProps) {
+export default function TaskColumn({ id, title, count, color, tasks, onTaskClick }: TaskColumnProps) {
+    const { setNodeRef } = useDroppable({
+        id: id,
+    });
+
     return (
         <div className="min-w-[350px] flex flex-col h-full">
             <div className="flex items-center justify-between mb-4 px-1">
@@ -24,8 +34,12 @@ export default function TaskColumn({ title, count, color, children }: TaskColumn
                 </button>
             </div>
 
-            <div className="flex-1 bg-[#0f172a]/50 rounded-xl p-2 space-y-3 overflow-y-auto">
-                {children}
+            <div ref={setNodeRef} className="flex-1 bg-[#0f172a]/50 rounded-xl p-2 space-y-3 overflow-y-auto min-h-[150px]">
+                <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                    {tasks.map((task) => (
+                        <TaskCard key={task.id} task={task} onClick={onTaskClick} />
+                    ))}
+                </SortableContext>
             </div>
         </div>
     );

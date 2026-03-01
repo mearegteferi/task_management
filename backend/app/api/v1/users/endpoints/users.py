@@ -10,8 +10,6 @@ from app.api.v1.users.dependencies import (
     SessionDep,
     get_current_active_superuser,
 )
-from app.core.config import settings
-from app.core.security import verify_password
 from app.api.v1.users.models import User
 from app.api.v1.users.schemas import (
     Message,
@@ -24,11 +22,14 @@ from app.api.v1.users.schemas import (
     UserUpdateMe,
 )
 from app.api.v1.users.utils import generate_new_account_email, send_email
+from app.core.config import settings
+from app.core.security import verify_password
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix='/users', tags=['users'])
+
 
 @router.get(
-    "/",
+    '/',
     dependencies=[Depends(get_current_active_superuser)],
     response_model=UsersPublic,
 )
@@ -43,17 +44,18 @@ async def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> An
     result = await session.execute(statement)
     users = result.scalars().all()
 
-    return UsersPublic(data=users, count=count)
+    return UsersPublic(data=list(users), count=int(count or 0))  # type: ignore
+
 
 @router.post(
-    "/", dependencies=[Depends(get_current_active_superuser)], response_model=UserPublic
+    '/', dependencies=[Depends(get_current_active_superuser)], response_model=UserPublic
 )
 async def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
     user = await services.get_user_by_email(session=session, email=user_in.email)
     if user:
         raise HTTPException(
             status_code=400,
-            detail="The user with this email already exists in the system.",
+            detail='The user with this email already exists in the system.',
         )
 
     user = await services.create_user(session=session, user_create=user_in)
@@ -68,70 +70,78 @@ async def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
         )
     return user
 
-@router.patch("/me", response_model=UserPublic)
+
+@router.patch('/me', response_model=UserPublic)
 async def update_user_me(
     *, session: SessionDep, user_in: UserUpdateMe, current_user: CurrentUser
 ) -> Any:
     if user_in.email:
-        existing_user = await services.get_user_by_email(session=session, email=user_in.email)
+        existing_user = await services.get_user_by_email(
+            session=session, email=user_in.email
+        )
         if existing_user and existing_user.id != current_user.id:
             raise HTTPException(
-                status_code=409, detail="User with this email already exists"
+                status_code=409, detail='User with this email already exists'
             )
-    
+
     user_data = user_in.model_dump(exclude_unset=True)
     # Using generic update crud
-    current_user = await services.update_user(session=session, db_user=current_user, user_in=user_data)
+    current_user = await services.update_user(
+        session=session, db_user=current_user, user_in=user_data
+    )
     return current_user
 
-@router.patch("/me/password", response_model=Message)
+
+@router.patch('/me/password', response_model=Message)
 async def update_password_me(
     *, session: SessionDep, body: UpdatePassword, current_user: CurrentUser
 ) -> Any:
     verified, _ = verify_password(body.current_password, current_user.hashed_password)
     if not verified:
-        raise HTTPException(status_code=400, detail="Incorrect password")
+        raise HTTPException(status_code=400, detail='Incorrect password')
     if body.current_password == body.new_password:
         raise HTTPException(
-            status_code=400, detail="New password cannot be the same as the current one"
+            status_code=400, detail='New password cannot be the same as the current one'
         )
-    
-    await crud.update_user(
-        session=session, 
-        db_user=current_user, 
-        user_in={"password": body.new_password}
-    )
-    return Message(message="Password updated successfully")
 
-@router.get("/me", response_model=UserPublic)
+    await services.update_user(
+        session=session, db_user=current_user, user_in={'password': body.new_password}
+    )
+    return Message(message='Password updated successfully')
+
+
+@router.get('/me', response_model=UserPublic)
 async def read_user_me(current_user: CurrentUser) -> Any:
     return current_user
 
-@router.delete("/me", response_model=Message)
+
+@router.delete('/me', response_model=Message)
 async def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     if current_user.is_superuser:
         raise HTTPException(
-            status_code=403, detail="Super users are not allowed to delete themselves"
+            status_code=403, detail='Super users are not allowed to delete themselves'
         )
     # Async Delete
     await session.delete(current_user)
     await session.commit()
-    return Message(message="User deleted successfully")
+    return Message(message='User deleted successfully')
 
-@router.post("/signup", response_model=UserPublic)
+
+@router.post('/signup', response_model=UserPublic)
 async def register_user(session: SessionDep, user_in: UserRegister) -> Any:
     user = await services.get_user_by_email(session=session, email=user_in.email)
     if user:
         raise HTTPException(
             status_code=400,
-            detail="The user with this email already exists in the system",
+            detail='The user with this email already exists in the system',
         )
     # Convert Register schema to Create schema
     user_create = UserCreate.model_validate(user_in.model_dump())
     user = await services.create_user(session=session, user_create=user_create)
     return user
 
-@router.get("/{user_id}", response_model=UserPublic)
+
+@router.get('/{user_id}', response_model=UserPublic)
 async def read_user_by_id(
     user_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> Any:
@@ -144,11 +154,12 @@ async def read_user_by_id(
             detail="The user doesn't have enough privileges",
         )
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail='User not found')
     return user
 
+
 @router.patch(
-    "/{user_id}",
+    '/{user_id}',
     dependencies=[Depends(get_current_active_superuser)],
     response_model=UserPublic,
 )
@@ -162,31 +173,36 @@ async def update_user(
     if not db_user:
         raise HTTPException(
             status_code=404,
-            detail="The user with this id does not exist in the system",
+            detail='The user with this id does not exist in the system',
         )
     if user_in.email:
-        existing_user = await services.get_user_by_email(session=session, email=user_in.email)
+        existing_user = await services.get_user_by_email(
+            session=session, email=user_in.email
+        )
         if existing_user and existing_user.id != user_id:
             raise HTTPException(
-                status_code=409, detail="User with this email already exists"
+                status_code=409, detail='User with this email already exists'
             )
 
-    db_user = await services.update_user(session=session, db_user=db_user, user_in=user_in)
+    db_user = await services.update_user(
+        session=session, db_user=db_user, user_in=user_in
+    )
     return db_user
 
-@router.delete("/{user_id}", dependencies=[Depends(get_current_active_superuser)])
+
+@router.delete('/{user_id}', dependencies=[Depends(get_current_active_superuser)])
 async def delete_user(
     session: SessionDep, current_user: CurrentUser, user_id: uuid.UUID
 ) -> Message:
     user = await session.get(User, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail='User not found')
     if user.id == current_user.id:
         raise HTTPException(
-            status_code=403, detail="Super users are not allowed to delete themselves"
+            status_code=403, detail='Super users are not allowed to delete themselves'
         )
-    
+
     # Removed Item Cascade logic (handled by DB or not needed as Items are removed)
     await session.delete(user)
     await session.commit()
-    return Message(message="User deleted successfully")
+    return Message(message='User deleted successfully')

@@ -4,12 +4,35 @@ import React from "react";
 import { Task } from "@/types";
 import { Calendar, Clock, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface TaskCardProps {
     task: Task;
+    onClick: (task: Task) => void;
 }
 
-export default function TaskCard({ task }: TaskCardProps) {
+export default function TaskCard({ task, onClick }: TaskCardProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({
+        id: task.id,
+        data: {
+            type: "Task",
+            task,
+        },
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
     const priorityColors = {
         1: "bg-blue-900/40 text-blue-300 border-blue-800", // Low
         2: "bg-orange-900/40 text-orange-300 border-orange-800", // Medium
@@ -22,8 +45,25 @@ export default function TaskCard({ task }: TaskCardProps) {
         3: "High Priority",
     };
 
+    if (isDragging) {
+        return (
+            <div
+                ref={setNodeRef}
+                style={style}
+                className="opacity-30 bg-[#1e293b] p-4 rounded-lg border border-gray-700 h-[120px]"
+            />
+        );
+    }
+
     return (
-        <div className="bg-[#1e293b] p-4 rounded-lg border border-gray-700 shadow-sm hover:border-gray-600 transition-all cursor-pointer group">
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            {...listeners}
+            onClick={() => onClick(task)}
+            className="bg-[#1e293b] p-4 rounded-lg border border-gray-700 shadow-sm hover:border-gray-600 transition-all cursor-pointer group hover:rotate-1"
+        >
             <div className="flex justify-between items-start mb-3">
                 <span
                     className={cn(
@@ -59,7 +99,6 @@ export default function TaskCard({ task }: TaskCardProps) {
                     </span>
                 </div>
 
-                {/* Placeholder for Assignee Avatar */}
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-[10px] text-white font-bold border border-[#1e293b]">
                     ?
                 </div>

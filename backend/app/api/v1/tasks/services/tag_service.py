@@ -1,6 +1,5 @@
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.tasks.models import Tag
 from app.api.v1.tasks.schemas import TagCreate
@@ -8,7 +7,9 @@ from app.api.v1.tasks.schemas import TagCreate
 
 class TagService:
     @staticmethod
-    async def get_or_create_tags(db: AsyncSession, tags_in: List[TagCreate]) -> List[Tag]:
+    async def get_or_create_tags(
+        db: AsyncSession, tags_in: list[TagCreate]
+    ) -> list[Tag]:
         """
         Takes a list of Tag schemas.
         Returns a list of Tag DB instances (existing or newly created).
@@ -31,6 +32,6 @@ class TagService:
         return tag_instances
 
     @staticmethod
-    async def get_all(db: AsyncSession) -> List[Tag]:
+    async def get_all(db: AsyncSession) -> list[Tag]:
         result = await db.execute(select(Tag))
-        return result.scalars().all()
+        return list(result.scalars().all())

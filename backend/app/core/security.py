@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 import jwt
@@ -16,17 +16,23 @@ password_hash = PasswordHash(
 )
 
 
-def create_token(subject: str | Any, expires_delta: timedelta, token_type: Literal["access", "refresh"]) -> str:
-    expire = datetime.now(timezone.utc) + expires_delta
+def create_token(
+    subject: str | Any,
+    expires_delta: timedelta,
+    token_type: Literal['access', 'refresh'],
+) -> str:
+    expire = datetime.now(UTC) + expires_delta
 
     to_encode = {
-        "exp": expire,
-        "sub": str(subject),
-        "type": token_type,  # CRITICAL: Distinguish between access and refresh
-        "iat": datetime.now(timezone.utc)
+        'exp': expire,
+        'sub': str(subject),
+        'type': token_type,  # CRITICAL: Distinguish between access and refresh
+        'iat': datetime.now(UTC),
     }
 
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
     return encoded_jwt
 
 
@@ -34,7 +40,7 @@ def create_access_token(subject: str | Any) -> str:
     return create_token(
         subject=subject,
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-        token_type="access"
+        token_type='access',
     )
 
 
@@ -42,7 +48,7 @@ def create_refresh_token(subject: str | Any) -> str:
     return create_token(
         subject=subject,
         expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_MINUTES),
-        token_type="refresh"
+        token_type='refresh',
     )
 
 

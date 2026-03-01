@@ -1,10 +1,12 @@
 from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_password_hash, verify_password
 from app.api.v1.users.models import User
 from app.api.v1.users.schemas import UserCreate, UserUpdate
+from app.core.security import get_password_hash, verify_password
+
 
 async def create_user(*, session: AsyncSession, user_create: UserCreate) -> User:
     db_obj = User(
@@ -19,6 +21,7 @@ async def create_user(*, session: AsyncSession, user_create: UserCreate) -> User
     await session.refresh(db_obj)
     return db_obj
 
+
 async def update_user(
     *, session: AsyncSession, db_user: User, user_in: UserUpdate | dict[str, Any]
 ) -> User:
@@ -27,11 +30,11 @@ async def update_user(
     else:
         update_data = user_in.model_dump(exclude_unset=True)
 
-    if "password" in update_data:
-        password = update_data["password"]
+    if 'password' in update_data:
+        password = update_data['password']
         hashed_password = get_password_hash(password)
-        update_data["hashed_password"] = hashed_password
-        del update_data["password"]
+        update_data['hashed_password'] = hashed_password
+        del update_data['password']
 
     for field, value in update_data.items():
         setattr(db_user, field, value)
@@ -41,12 +44,15 @@ async def update_user(
     await session.refresh(db_user)
     return db_user
 
+
 async def get_user_by_email(*, session: AsyncSession, email: str) -> User | None:
     statement = select(User).where(User.email == email)
     result = await session.execute(statement)
     return result.scalars().first()
 
-DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$MjQyZWE1MzBjYjJlZTI0Yw$YTU4NGM5ZTZmYjE2NzZlZjY0ZWY3ZGRkY2U2OWFjNjk"
+
+DUMMY_HASH = '$argon2id$v=19$m=65536,t=3,p=4$MjQyZWE1MzBjYjJlZTI0Yw$YTU4NGM5ZTZmYjE2NzZlZjY0ZWY3ZGRkY2U2OWFjNjk'
+
 
 async def authenticate(
     *, session: AsyncSession, email: str, password: str

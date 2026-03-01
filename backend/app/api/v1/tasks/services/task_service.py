@@ -1,128 +1,133 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, and_
-from typing import Optional, List
 import uuid
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.tasks.models import Task, TaskStatus
-from app.api.v1.tasks.schemas import TaskCreate, TaskUpdate
+from app.api.v1.projects.models import Project
+from app.api.v1.tasks import schemas
+from app.api.v1.tasks.models import Task
 from app.api.v1.tasks.services.tag_service import TagService
+from app.core.redis import get_cache, set_cache, clear_cache_pattern
 
 
 class TaskService:
     @staticmethod
-    async def create(db: AsyncSession, task_in: TaskCreate, owner_id: uuid.UUID) -> Task:
-        # 1. Resolve Tags
-        tags = await TagService.get_or_create_tags(db, task_in.tags)
+    async def create_task(
+        db: AsyncSession, project_id: int, task_in: schemas.TaskCreate, user_id: uuid.UUID
+    ) -> Task:
+        # Verify project exists and belongs to user
+        result = await db.execute(
+            select(Project).where(Project.id == project_id, Project.owner_id == user_id)
+        )
+        project = result.scalars().first()
+        if not project:
+            raise HTTPException(status_code=404, detail='Project not found')
 
-        # 2. Create Task with owner_id
-        db_task = Task(
+        # Resolve Tags
+        tag_objects = await TagService.get_or_create_tags(db, task_in.tags)
+
+        task = Task(
             title=task_in.title,
-            description=task_in.description,
-            status=task_in.status,
-            priority=task_in.priority,
-            due_date=task_in.due_date,
-            tags=tags,
-            owner_id=owner_id  # <--- ASSIGN OWNER
+            is_completed=task_in.is_completed,
+            project_id=project_id,
+            tags=tag_objects,
         )
-        db.add(db_task)
+        db.add(task)
         await db.commit()
-        await db.refresh(db_task)
-        return db_task
+        await db.refresh(task)
+        
+        # Invalidate cache
+        await clear_cache_pattern(f"project:{project_id}:tasks:*")
+        await clear_cache_pattern(f"user:{user_id}:analytics")
+        
+        return task
 
     @staticmethod
-    async def get_multi(
-            db: AsyncSession,
-            owner_id: uuid.UUID,  # <--- REQUIRE OWNER ID
-            skip: int = 0,
-            limit: int = 100,
-            status: Optional[TaskStatus] = None,
-            priority: Optional[int] = None,
-            search: Optional[str] = None
-    ) -> List[Task]:
+    async def get_tasks(db: AsyncSession, project_id: int, user_id: uuid.UUID) -> list[Task]:
+        # Try cache
+        cache_key = f"project:{project_id}:tasks:list"
+        cached_data = await get_cache(cache_key)
+        if cached_data:
+            return [Task(**t) for t in cached_data]
 
-        # Filter by owner_id AND is_deleted=False
-        query = select(Task).where(
-            and_(
-                Task.owner_id == owner_id,
-                Task.is_deleted == False
+        # First verify project ownership
+        result = await db.execute(
+            select(Project).where(Project.id == project_id, Project.owner_id == user_id)
+        )
+        if not result.scalars().first():
+            raise HTTPException(status_code=404, detail='Project not found')
+
+        result = await db.execute(
+            select(Task).where(Task.project_id == project_id).order_by(Task.id.asc())
+        )
+        tasks = list(result.scalars().all())
+        
+        # Cache results
+        from app.api.v1.tasks.schemas import TaskResponse
+        tasks_data = [TaskResponse.model_validate(t).model_dump(mode='json') for t in tasks]
+        await set_cache(cache_key, tasks_data, expire=3600)
+        
+        return tasks
+
+    @staticmethod
+    async def update_task(
+        db: AsyncSession, task_id: int, task_in: schemas.TaskUpdate, user_id: uuid.UUID
+    ) -> Task:
+        result = await db.execute(select(Task).where(Task.id == task_id))
+        task = result.scalars().first()
+        if not task:
+            raise HTTPException(status_code=404, detail='Task not found')
+
+        # Verify project ownership
+        result = await db.execute(
+            select(Project).where(
+                Project.id == task.project_id, Project.owner_id == user_id
             )
         )
+        if not result.scalars().first():
+            raise HTTPException(status_code=403, detail='Not enough privileges')
 
-        # Apply Filters dynamically
-        if status:
-            query = query.where(Task.status == status)
-        if priority:
-            query = query.where(Task.priority == priority)
-        if search:
-            query = query.where(
-                or_(
-                    Task.title.ilike(f"%{search}%"),
-                    Task.description.ilike(f"%{search}%")
-                )
-            )
-
-        query = query.order_by(Task.created_at.desc()).offset(skip).limit(limit)
-
-        result = await db.execute(query)
-        return result.scalars().all()
-
-    @staticmethod
-    async def get_one(
-            db: AsyncSession,
-            task_id: int,
-            owner_id: uuid.UUID  # <--- REQUIRE OWNER ID
-    ) -> Optional[Task]:
-        # Only return if ID matches AND Owner matches
-        query = select(Task).where(
-            Task.id == task_id,
-            Task.owner_id == owner_id,  # Security check
-            Task.is_deleted == False
-        )
-        result = await db.execute(query)
-        return result.scalars().first()
-
-    @staticmethod
-    async def update(db: AsyncSession, db_task: Task, task_update: TaskUpdate) -> Task:
-        # Update logic remains mostly the same, as db_task is already validated in the endpoint
-        update_data = task_update.model_dump(exclude_unset=True)
-        tags_data = update_data.pop("tags", None)
+        update_data = task_in.model_dump(exclude_unset=True)
+        tags_data = update_data.pop('tags', None)
 
         for field, value in update_data.items():
-            setattr(db_task, field, value)
+            setattr(task, field, value)
 
         if tags_data is not None:
-            db_task.tags = await TagService.get_or_create_tags(db, task_update.tags)
+            task.tags = await TagService.get_or_create_tags(db, tags_data)
 
-        db.add(db_task)
+        db.add(task)
         await db.commit()
-        await db.refresh(db_task)
-        return db_task
+        await db.refresh(task)
+        
+        # Invalidate cache
+        await clear_cache_pattern(f"project:{task.project_id}:tasks:*")
+        await clear_cache_pattern(f"user:{user_id}:analytics")
+        
+        return task
 
     @staticmethod
-    async def delete(db: AsyncSession, db_task: Task) -> None:
-        db_task.is_deleted = True
-        db.add(db_task)
-        await db.commit()
+    async def delete_task(db: AsyncSession, task_id: int, user_id: uuid.UUID) -> dict[str, str]:
+        result = await db.execute(select(Task).where(Task.id == task_id))
+        task = result.scalars().first()
+        if not task:
+            raise HTTPException(status_code=404, detail='Task not found')
 
-    @staticmethod
-    async def restore(
-            db: AsyncSession,
-            task_id: int,
-            owner_id: uuid.UUID  # <--- REQUIRE OWNER ID
-    ) -> Optional[Task]:
-        # Can only restore YOUR OWN deleted tasks
-        query = select(Task).where(
-            Task.id == task_id,
-            Task.owner_id == owner_id,
-            Task.is_deleted == True
+        # Verify project ownership
+        result = await db.execute(
+            select(Project).where(
+                Project.id == task.project_id, Project.owner_id == user_id
+            )
         )
-        result = await db.execute(query)
-        db_task = result.scalars().first()
+        if not result.scalars().first():
+            raise HTTPException(status_code=403, detail='Not enough privileges')
 
-        if db_task:
-            db_task.is_deleted = False
-            db.add(db_task)
-            await db.commit()
-            await db.refresh(db_task)
-
-        return db_task
+        project_id = task.project_id
+        await db.delete(task)
+        await db.commit()
+        
+        # Invalidate cache
+        await clear_cache_pattern(f"project:{project_id}:tasks:*")
+        await clear_cache_pattern(f"user:{user_id}:analytics")
+        
+        return {'message': 'Task deleted'}

@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # --- Shared Properties ---
@@ -58,7 +59,7 @@ class UsersPublic(BaseModel):
 class Token(BaseModel):
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = 'bearer'
 
 
 class TokenRefresh(BaseModel):

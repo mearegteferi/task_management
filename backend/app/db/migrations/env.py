@@ -18,7 +18,10 @@ from app.db.base import Base
 
 # IMPORT ALL MODELS HERE
 from app.api.v1.users.models import User
+from app.api.v1.projects.models import Project
 from app.api.v1.tasks.models import Tag, Task
+from app.api.v1.comments.models import Comment
+from app.api.v1.attachments.models import Attachment
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
