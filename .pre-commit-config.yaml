@@ -1,0 +1,48 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: backend-ruff-check
+        name: backend ruff check
+        entry: uv run --project backend ruff check backend/app backend/tests
+        language: system
+        pass_filenames: false
+        files: ^backend/
+
+      - id: backend-ruff-format
+        name: backend ruff format
+        entry: uv run --project backend ruff format --check backend/app backend/tests
+        language: system
+        pass_filenames: false
+        files: ^backend/
+
+      - id: backend-ty
+        name: backend ty
+        entry: uv run --project backend ty check
+        language: system
+        pass_filenames: false
+        files: ^backend/
+
+      - id: frontend-lint
+        name: frontend lint
+        entry: npm --prefix frontend run lint
+        language: system
+        pass_filenames: false
+        files: ^frontend/
+
+      - id: frontend-typecheck
+        name: frontend typecheck
+        entry: npm --prefix frontend run typecheck
+        language: system
+        pass_filenames: false
+        files: ^frontend/
