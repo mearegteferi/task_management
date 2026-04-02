@@ -20,4 +20,3 @@ docker-compose*.yml
 .git/
 .gitignore
 .pre-commit-config.yaml
-final_mypy_errors.txt

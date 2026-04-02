@@ -1,6 +1,10 @@
 *.pyo
 .python-version
 __pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
 
 .venv/
 .env
@@ -38,6 +42,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 
 # vercel
 .vercel
@@ -49,3 +56,5 @@ next-env.d.ts
 
 .vscode/
 .idea/
+backend/uploads/*
+!backend/uploads/.gitkeep
