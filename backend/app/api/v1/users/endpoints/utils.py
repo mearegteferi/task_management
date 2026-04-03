@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from pydantic.networks import EmailStr
 
-from app.api.v1.users.dependencies import get_current_active_superuser
+from app.api.deps import get_current_active_superuser
 from app.api.v1.users.schemas import Message
 from app.api.v1.users.utils import generate_test_email, send_email
 
@@ -14,9 +14,6 @@ router = APIRouter(prefix='/utils', tags=['utils'])
     status_code=201,
 )
 def test_email(email_to: EmailStr) -> Message:
-    """
-    Test emails.
-    """
     email_data = generate_test_email(email_to=email_to)
     send_email(
         email_to=email_to,
@@ -24,8 +21,3 @@ def test_email(email_to: EmailStr) -> Message:
         html_content=email_data.html_content,
     )
     return Message(message='Test email sent')
-
-
-@router.get('/health-check/')
-async def health_check() -> bool:
-    return True
