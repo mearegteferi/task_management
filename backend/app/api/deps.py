@@ -13,13 +13,12 @@ from app.api.v1.users.schemas import TokenPayload
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 
-# OAuth2 scheme for Swagger UI
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f'{settings.API_V1_STR}/login/access-token'
 )
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -29,14 +28,15 @@ TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
 
 async def _get_user_from_token(
-    token: str, session: AsyncSession, required_type: Literal['access', 'refresh']
+    token: str,
+    session: AsyncSession,
+    required_type: Literal['access', 'refresh'],
 ) -> User:
-    """
-    Internal helper to decode token, validate type, and fetch user.
-    """
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
         )
         token_data = TokenPayload(**payload)
 
@@ -45,18 +45,17 @@ async def _get_user_from_token(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f'Invalid token type. Expected {required_type} token.',
             )
-
-    except jwt.ExpiredSignatureError:
+    except jwt.ExpiredSignatureError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Token has expired',
             headers={'WWW-Authenticate': 'Bearer'},
-        )
-    except (InvalidTokenError, ValidationError):
+        ) from exc
+    except (InvalidTokenError, ValidationError) as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Could not validate credentials',
-        )
+        ) from exc
 
     user = await session.get(User, token_data.sub)
 
@@ -82,6 +81,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 async def get_current_active_superuser(current_user: CurrentUser) -> User:
     if not current_user.is_superuser:
         raise HTTPException(
-            status_code=403, detail="The user doesn't have enough privileges"
+            status_code=403,
+            detail="The user doesn't have enough privileges",
         )
     return current_user

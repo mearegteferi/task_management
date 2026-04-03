@@ -3,15 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.api.deps import get_current_user_refresh
+from app.api.deps import SessionDep, get_current_user_refresh
 from app.api.v1.users import services
-from app.api.v1.users.dependencies import SessionDep
-from app.api.v1.users.schemas import (
-    Message,
-    NewPassword,
-    Token,
-    TokenRefresh,
-)
+from app.api.v1.users.schemas import Message, NewPassword, Token, TokenRefresh
 from app.api.v1.users.utils import (
     generate_password_reset_token,
     generate_reset_password_email,
@@ -25,20 +19,19 @@ router = APIRouter(tags=['login'])
 
 @router.post('/login/access-token', response_model=Token)
 async def login_access_token(
-    session: SessionDep, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+    session: SessionDep,
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
-    """
-    OAuth2 compatible token login, get an access token for future requests.
-    """
     user = await services.authenticate(
-        session=session, email=form_data.username, password=form_data.password
+        session=session,
+        email=form_data.username,
+        password=form_data.password,
     )
     if not user:
         raise HTTPException(status_code=400, detail='Incorrect email or password')
-    elif not user.is_active:
+    if not user.is_active:
         raise HTTPException(status_code=400, detail='Inactive user')
 
-    # Generate both tokens
     return Token(
         access_token=security.create_access_token(user.id),
         refresh_token=security.create_refresh_token(user.id),
@@ -46,17 +39,8 @@ async def login_access_token(
 
 
 @router.post('/refresh-token', response_model=Token)
-async def refresh_token(
-    session: SessionDep,
-    body: TokenRefresh,  # Expects {"refresh_token": "..."}
-) -> Token:
-    """
-    Rotate tokens: Validate refresh token, issue new access AND refresh tokens.
-    """
-    # 1. Validate the refresh token (checks signature, expiry, and type="refresh")
+async def refresh_token(session: SessionDep, body: TokenRefresh) -> Token:
     user = await get_current_user_refresh(token=body.refresh_token, session=session)
-
-    # 2. Issue new tokens (Token Rotation)
     return Token(
         access_token=security.create_access_token(user.id),
         refresh_token=security.create_refresh_token(user.id),
@@ -70,13 +54,16 @@ async def recover_password(email: str, session: SessionDep) -> Message:
     if user:
         password_reset_token = generate_password_reset_token(email=email)
         email_data = generate_reset_password_email(
-            email_to=user.email, email=email, token=password_reset_token
+            email_to=user.email,
+            email=email,
+            token=password_reset_token,
         )
         send_email(
             email_to=user.email,
             subject=email_data.subject,
             html_content=email_data.html_content,
         )
+
     return Message(
         message='If that email is registered, we sent a password recovery link'
     )
@@ -91,7 +78,7 @@ async def reset_password(session: SessionDep, body: NewPassword) -> Message:
     user = await services.get_user_by_email(session=session, email=email)
     if not user:
         raise HTTPException(status_code=400, detail='Invalid token')
-    elif not user.is_active:
+    if not user.is_active:
         raise HTTPException(status_code=400, detail='Inactive user')
 
     await services.update_user(
