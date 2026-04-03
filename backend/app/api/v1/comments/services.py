@@ -1,4 +1,5 @@
 import uuid
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +12,10 @@ from app.api.v1.tasks.models import Task
 class CommentService:
     @staticmethod
     async def create_comment(
-        db: AsyncSession, task_id: int, comment_in: schemas.CommentCreate, user_id: uuid.UUID
+        db: AsyncSession,
+        task_id: int,
+        comment_in: schemas.CommentCreate,
+        user_id: uuid.UUID,
     ) -> Comment:
         # Verify the task exists
         result = await db.execute(select(Task).where(Task.id == task_id))
