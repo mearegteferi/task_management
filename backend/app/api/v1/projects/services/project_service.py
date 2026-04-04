@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.projects.models import Project, ProjectStatus
 from app.api.v1.projects.schemas import ProjectCreate, ProjectUpdate
-from app.core.redis import get_cache, set_cache, clear_cache_pattern
+from app.core.redis import clear_cache_pattern, get_cache, set_cache
 
 
 class ProjectService:
@@ -25,11 +25,11 @@ class ProjectService:
         db.add(db_project)
         await db.commit()
         await db.refresh(db_project)
-        
+
         # Invalidate cache
-        await clear_cache_pattern(f"user:{owner_id}:projects:*")
-        await clear_cache_pattern(f"user:{owner_id}:analytics")
-        
+        await clear_cache_pattern(f'user:{owner_id}:projects:*')
+        await clear_cache_pattern(f'user:{owner_id}:analytics')
+
         return db_project
 
     @staticmethod
@@ -44,14 +44,18 @@ class ProjectService:
     ) -> list[Project]:
 
         # Try to get from cache
-        cache_key = f"user:{owner_id}:projects:list:{skip}:{limit}:{status}:{priority}:{search}"
+        cache_key = (
+            f'user:{owner_id}:projects:list:{skip}:{limit}:{status}:{priority}:{search}'
+        )
         cached_data = await get_cache(cache_key)
         if cached_data:
-            return [Project(**p) for p in cached_data] # This might need adjustment if Project doesn't support dict init well with relations, but for simple list it's usually fine or use schemas
+            return [
+                Project(**p) for p in cached_data
+            ]  # This might need adjustment if Project doesn't support dict init well with relations, but for simple list it's usually fine or use schemas
 
         # Filter by owner_id AND is_deleted=False
         query = select(Project).where(
-            and_(Project.owner_id == owner_id, Project.is_deleted == False)
+            and_(Project.owner_id == owner_id, Project.is_deleted.is_(False))
         )
 
         # Apply Filters dynamically
@@ -71,19 +75,22 @@ class ProjectService:
 
         result = await db.execute(query)
         projects = list(result.scalars().all())
-        
+
         # Cache the result (need to serialize objects)
         # Note: In a real app, you'd use schemas for serialization
         # For simplicity, if we enable decode_responses=True in Redis, we store JSON
         # Here we converts projects to dicts if possible or just use a simpler caching strategy if needed.
         # However, Project model might have issues with simple json dumps.
         # Let's use a list of IDs or simpler dicts.
-        
+
         # IMPROVEMENT: Use schemas for caching to avoid SQLAlchemy complexity in cache
         from app.api.v1.projects.schemas import ProjectResponse
-        projects_data = [ProjectResponse.model_validate(p).model_dump(mode='json') for p in projects]
+
+        projects_data = [
+            ProjectResponse.model_validate(p).model_dump(mode='json') for p in projects
+        ]
         await set_cache(cache_key, projects_data, expire=3600)
-        
+
         return projects
 
     @staticmethod
@@ -93,7 +100,7 @@ class ProjectService:
         owner_id: uuid.UUID,  # <--- REQUIRE OWNER ID
     ) -> Project | None:
         # Try cache
-        cache_key = f"user:{owner_id}:projects:{project_id}"
+        cache_key = f'user:{owner_id}:projects:{project_id}'
         cached_data = await get_cache(cache_key)
         if cached_data:
             return Project(**cached_data)
@@ -102,15 +109,19 @@ class ProjectService:
         query = select(Project).where(
             Project.id == project_id,
             Project.owner_id == owner_id,  # Security check
-            Project.is_deleted == False,
+            Project.is_deleted.is_(False),
         )
         result = await db.execute(query)
         project = result.scalars().first()
-        
+
         if project:
             from app.api.v1.projects.schemas import ProjectResponse
-            await set_cache(cache_key, ProjectResponse.model_validate(project).model_dump(mode='json'))
-            
+
+            await set_cache(
+                cache_key,
+                ProjectResponse.model_validate(project).model_dump(mode='json'),
+            )
+
         return project
 
     @staticmethod
@@ -125,11 +136,11 @@ class ProjectService:
         db.add(db_project)
         await db.commit()
         await db.refresh(db_project)
-        
+
         # Invalidate cache
-        await clear_cache_pattern(f"user:{db_project.owner_id}:projects:*")
-        await clear_cache_pattern(f"user:{db_project.owner_id}:analytics")
-        
+        await clear_cache_pattern(f'user:{db_project.owner_id}:projects:*')
+        await clear_cache_pattern(f'user:{db_project.owner_id}:analytics')
+
         return db_project
 
     @staticmethod
@@ -137,10 +148,10 @@ class ProjectService:
         db_project.is_deleted = True
         db.add(db_project)
         await db.commit()
-        
+
         # Invalidate cache
-        await clear_cache_pattern(f"user:{db_project.owner_id}:projects:*")
-        await clear_cache_pattern(f"user:{db_project.owner_id}:analytics")
+        await clear_cache_pattern(f'user:{db_project.owner_id}:projects:*')
+        await clear_cache_pattern(f'user:{db_project.owner_id}:analytics')
 
     @staticmethod
     async def restore(
@@ -162,9 +173,9 @@ class ProjectService:
             db.add(db_project)
             await db.commit()
             await db.refresh(db_project)
-            
+
             # Invalidate cache
-            await clear_cache_pattern(f"user:{owner_id}:projects:*")
-            await clear_cache_pattern(f"user:{owner_id}:analytics")
+            await clear_cache_pattern(f'user:{owner_id}:projects:*')
+            await clear_cache_pattern(f'user:{owner_id}:analytics')
 
         return db_project
