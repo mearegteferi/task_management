@@ -1,8 +1,10 @@
+import enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
     Column,
+    Enum,
     ForeignKey,
     Integer,
     String,
@@ -16,6 +18,12 @@ if TYPE_CHECKING:
     from app.api.v1.attachments.models import Attachment
     from app.api.v1.comments.models import Comment
     from app.api.v1.projects.models import Project
+
+
+class TaskStatus(enum.StrEnum):
+    TODO = 'todo'
+    IN_PROGRESS = 'in_progress'
+    DONE = 'done'
 
 
 # Tag model moved from projects to tasks
@@ -46,6 +54,11 @@ class Task(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(200), index=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus), default=TaskStatus.TODO
+    )
+    priority: Mapped[int] = mapped_column(Integer, default=1)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     project_id: Mapped[int] = mapped_column(ForeignKey('projects.id'), nullable=False)
 
