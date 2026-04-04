@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.analytics import router as analytics_router
+from app.api.v1.architect import router as architect_router
 from app.api.v1.attachments import router as attachments_router
 from app.api.v1.comments import router as comments_router
 from app.api.v1.projects import router as projects_router
@@ -17,6 +18,9 @@ api_router.include_router(projects_router.api_router)
 
 # Tasks
 api_router.include_router(tasks_router.router, tags=['Tasks'])
+
+# Architect
+api_router.include_router(architect_router.router, tags=['Architect'])
 
 # Comments
 api_router.include_router(comments_router.router, tags=['Comments'])
