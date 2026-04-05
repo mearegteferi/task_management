@@ -1,13 +1,14 @@
 #!/bin/sh
 
-set -e
-
+set -eu
 
 echo "Running migrations..."
-uv run alembic upgrade head
+alembic upgrade head
 
-echo "Creating initial data..."
-uv run python -m app.initial_data
+if [ -n "${INITIAL_SUPERUSER_EMAIL:-}" ] && [ -n "${INITIAL_SUPERUSER_PASSWORD:-}" ]; then
+  echo "Creating initial superuser..."
+  python -m app.initial_data
+fi
 
 echo "Starting application..."
 exec "$@"

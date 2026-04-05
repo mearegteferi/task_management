@@ -1,57 +1,48 @@
-# Build stage: Install dependencies
+# syntax=docker/dockerfile:1.7
+
 FROM python:3.14-slim AS builder
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-# Set working directory
 WORKDIR /app
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy project files
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml uv.lock ./
-
-# Install dependencies into a virtual environment
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-dev --no-install-project
 
-# Final stage: Run the application
-FROM python:3.14-slim
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
-# Create a non-root user
-RUN groupadd -r app && useradd -r -g app app
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
+FROM python:3.14-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
 
-# Set working directory
 WORKDIR /app
 
-# Copy the virtual environment from the builder stage
-COPY --from=builder /app/.venv /app/.venv
+RUN groupadd --system app \
+    && useradd --system --gid app --create-home --home-dir /app app
 
-# Install uv in the final stage (needed for entrypoint scripts/migrations)
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=builder /app /app
 
-# Copy application code
-COPY . .
+RUN chmod +x /app/entrypoint.sh \
+    && chown -R app:app /app
 
-# Set permissions for the non-root user
-RUN chown -R app:app /app && \
-    chmod +x /app/entrypoint.sh
-
-# Switch to the non-root user
 USER app
 
-# Expose the port the app runs on
 EXPOSE 8000
 
-# Set the entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]
-
-# Default command
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
