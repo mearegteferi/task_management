@@ -1,4 +1,6 @@
 export type ProjectStatus = 'todo' | 'in_progress' | 'done';
+export type TaskStatus = 'todo' | 'in_progress' | 'done';
+export type ArchitectRole = 'user' | 'assistant';
 
 export interface UserPublic {
   email: string;
@@ -17,6 +19,16 @@ export interface Token {
 
 export interface Message {
   message: string;
+}
+
+export interface UserUpdateMe {
+  full_name?: string | null;
+  email?: string | null;
+}
+
+export interface UpdatePasswordRequest {
+  current_password: string;
+  new_password: string;
 }
 
 export interface ProjectResponse {
@@ -39,11 +51,43 @@ export interface TagResponse {
 
 export interface TaskResponse {
   title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: number;
   is_completed: boolean;
   id: number;
   project_id: number;
   created_at: string;
   tags: TagResponse[];
+}
+
+export interface TaskSuggestion {
+  title: string;
+  description: string | null;
+  estimated_priority: number;
+}
+
+export interface ProjectBreakdown {
+  title: string;
+  description: string | null;
+  tasks: TaskSuggestion[];
+}
+
+export interface ArchitectDraftResponse {
+  session_id: string;
+  draft: ProjectBreakdown;
+}
+
+export interface ArchitectConfirmResponse {
+  project: ProjectResponse;
+  tasks: TaskResponse[];
+}
+
+export interface ArchitectChatMessage {
+  id: string;
+  role: ArchitectRole;
+  content: string;
+  timestamp: string;
 }
 
 export interface CommentResponse {
@@ -66,13 +110,23 @@ export interface AttachmentResponse {
   uploaded_at: string;
 }
 
-export interface AttachmentCreate {
-  filename: string;
-  file_type?: string | null;
-}
-
 export interface ProjectStatusCount {
   status: string;
+  count: number;
+}
+
+export interface TaskStatusCount {
+  status: string;
+  count: number;
+}
+
+export interface TaskPriorityCount {
+  priority: number;
+  count: number;
+}
+
+export interface RecentTaskActivityPoint {
+  date: string;
   count: number;
 }
 
@@ -80,6 +134,14 @@ export interface AnalyticsResponse {
   total_projects: number;
   projects_by_status: ProjectStatusCount[];
   total_tasks: number;
+  completed_tasks: number;
+  task_completion_rate: number;
+  active_projects: number;
+  overdue_projects: number;
+  average_tasks_per_project: number;
+  tasks_by_status: TaskStatusCount[];
+  tasks_by_priority: TaskPriorityCount[];
+  recent_task_activity: RecentTaskActivityPoint[];
 }
 
 export interface UsersPublic {

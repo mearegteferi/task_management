@@ -1,6 +1,20 @@
 import api from '../lib/api';
 import { AttachmentResponse } from '../types/api';
 
+function getFilenameFromDisposition(contentDisposition?: string): string | null {
+    if (!contentDisposition) {
+        return null;
+    }
+
+    const utfMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utfMatch?.[1]) {
+        return decodeURIComponent(utfMatch[1]);
+    }
+
+    const plainMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+    return plainMatch?.[1] ?? null;
+}
+
 export const attachmentService = {
     getAttachments: async (taskId: number): Promise<AttachmentResponse[]> => {
         const response = await api.get<AttachmentResponse[]>(`/tasks/${taskId}/attachments/`);
@@ -23,7 +37,14 @@ export const attachmentService = {
         return response.data;
     },
 
-    getDownloadUrl: (attachmentId: number): string => {
-        return `${api.defaults.baseURL}/attachments/${attachmentId}/download`;
-    }
+    downloadAttachment: async (attachmentId: number): Promise<{ blob: Blob; filename: string | null }> => {
+        const response = await api.get<Blob>(`/attachments/${attachmentId}/download`, {
+            responseType: 'blob',
+        });
+
+        return {
+            blob: response.data,
+            filename: getFilenameFromDisposition(response.headers['content-disposition']),
+        };
+    },
 };

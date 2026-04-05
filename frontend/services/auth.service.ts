@@ -1,5 +1,5 @@
 import api from '../lib/api';
-import { Token, UserPublic } from '../types/api';
+import { Message, Token, UpdatePasswordRequest, UserPublic, UserUpdateMe } from '../types/api';
 
 export const authService = {
     login: async (formData: FormData): Promise<{ token: Token; user: UserPublic }> => {
@@ -20,18 +20,33 @@ export const authService = {
         return { token: response.data, user: userResponse.data };
     },
 
-    register: async (data: any): Promise<UserPublic> => {
+    register: async (data: Record<string, unknown>): Promise<UserPublic> => {
         const response = await api.post<UserPublic>('/users/signup', data);
         return response.data;
     },
 
-    recoverPassword: async (email: string): Promise<{ message: string }> => {
-        const response = await api.post<{ message: string }>(`/password-recovery/${email}`);
+    getCurrentUser: async (): Promise<UserPublic> => {
+        const response = await api.get<UserPublic>('/users/me');
         return response.data;
     },
 
-    resetPassword: async (data: any): Promise<{ message: string }> => {
-        const response = await api.post<{ message: string }>('/reset-password/', data);
+    updateProfile: async (data: UserUpdateMe): Promise<UserPublic> => {
+        const response = await api.patch<UserPublic>('/users/me', data);
+        return response.data;
+    },
+
+    updatePassword: async (data: UpdatePasswordRequest): Promise<Message> => {
+        const response = await api.patch<Message>('/users/me/password', data);
+        return response.data;
+    },
+
+    recoverPassword: async (email: string): Promise<Message> => {
+        const response = await api.post<Message>(`/password-recovery/${email}`);
+        return response.data;
+    },
+
+    resetPassword: async (data: Record<string, unknown>): Promise<Message> => {
+        const response = await api.post<Message>('/reset-password/', data);
         return response.data;
     },
 };

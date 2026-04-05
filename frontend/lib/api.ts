@@ -36,7 +36,7 @@ api.interceptors.response.use(
                     updateAccessToken(access_token);
                     originalRequest.headers.Authorization = `Bearer ${access_token}`;
                     return api(originalRequest);
-                } catch (refreshError) {
+                } catch {
                     clearAuth();
                     window.location.href = '/login';
                 }
