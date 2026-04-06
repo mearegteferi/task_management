@@ -12,6 +12,20 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { AlertCircle, Loader2, Sparkles, Zap, Shield, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+function getErrorMessage(error: unknown) {
+    if (
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail === 'string'
+    ) {
+        return (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+            || 'Authentication failed. Please check your credentials.';
+    }
+
+    return 'Authentication failed. Please check your credentials.';
+}
+
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -33,8 +47,8 @@ export default function LoginPage() {
             const { token, user } = await authService.login(formData);
             setAuth(user, token.access_token, token.refresh_token);
             router.push('/dashboard');
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Authentication failed. Please check your credentials.');
+        } catch (error: unknown) {
+            setError(getErrorMessage(error));
         } finally {
             setIsLoading(false);
         }
@@ -80,15 +94,15 @@ export default function LoginPage() {
                         </div>
                     </motion.div>
                     <h1 className="text-4xl font-black tracking-tighter text-white">
-                        Project <span className="text-primary italic">Aura</span>
+                        Sofi <span className="text-primary italic">Task</span>
                     </h1>
-                    <p className="text-zinc-500 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Neural Synchronization</p>
+                    <p className="text-zinc-500 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Project and Task Management</p>
                 </div>
 
                 <Card className="border-none shadow-3xl bg-white/5 dark:bg-zinc-900/40 backdrop-blur-2xl rounded-[2.5rem] overflow-hidden">
                     <CardHeader className="p-8 pb-4">
                         <CardTitle className="text-2xl font-black tracking-tight text-white">Welcome back</CardTitle>
-                        <CardDescription className="text-zinc-500 font-medium">Identify yourself to enter the stream</CardDescription>
+                        <CardDescription className="text-zinc-500 font-medium">Sign in to continue to your workspace</CardDescription>
                     </CardHeader>
 
                     <form onSubmit={handleSubmit}>
@@ -109,13 +123,13 @@ export default function LoginPage() {
 
                             <div className="space-y-4">
                                 <div className="space-y-2 group">
-                                    <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-primary transition-colors">Neural Address</Label>
+                                    <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-primary transition-colors">Email Address</Label>
                                     <div className="relative">
                                         <Shield className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 group-focus-within:text-primary transition-colors" />
                                         <Input
                                             id="email"
                                             type="email"
-                                            placeholder="name@nexus.com"
+                                            placeholder="name@example.com"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             required
@@ -126,7 +140,7 @@ export default function LoginPage() {
 
                                 <div className="space-y-2 group">
                                     <div className="flex items-center justify-between">
-                                        <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-primary transition-colors">Security Key</Label>
+                                        <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-primary transition-colors">Password</Label>
                                     </div>
                                     <div className="relative">
                                         <Key className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 group-focus-within:text-primary transition-colors" />
@@ -151,16 +165,16 @@ export default function LoginPage() {
                             >
                                 {isLoading ? <Loader2 className="animate-spin" /> : (
                                     <span className="flex items-center gap-2">
-                                        INITIATE SYNC <Sparkles size={16} />
+                                        Sign In <Sparkles size={16} />
                                     </span>
                                 )}
                             </Button>
 
                             <div className="text-center">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                                    New to the orbit?{' '}
+                                    Need an account?{' '}
                                     <Link href="/register" className="text-primary hover:text-accent transition-colors underline decoration-2 underline-offset-4">
-                                        Create Identity
+                                        Create Account
                                     </Link>
                                 </p>
                             </div>

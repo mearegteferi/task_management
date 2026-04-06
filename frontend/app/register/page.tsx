@@ -11,6 +11,24 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { AlertCircle, Loader2, CheckCircle2, Zap, Sparkles, User, Shield, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+function getErrorMessage(error: unknown) {
+    if (
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error
+    ) {
+        const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+        if (typeof detail === 'string') {
+            return detail;
+        }
+        if (Array.isArray(detail) && typeof detail[0]?.msg === 'string') {
+            return detail[0].msg;
+        }
+    }
+
+    return 'Registration failed. Please try again.';
+}
+
 export default function RegisterPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -33,8 +51,8 @@ export default function RegisterPage() {
             });
             setIsSuccess(true);
             setTimeout(() => router.push('/login'), 2000);
-        } catch (err: any) {
-            setError(err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || 'Registration failed. Please try again.');
+        } catch (error: unknown) {
+            setError(getErrorMessage(error));
         } finally {
             setIsLoading(false);
         }
@@ -58,9 +76,9 @@ export default function RegisterPage() {
                         >
                             <CheckCircle2 className="h-12 w-12 text-green-500 animate-pulse" />
                         </motion.div>
-                        <CardTitle className="text-3xl font-black tracking-tighter text-white mb-4">Identity Synchronized</CardTitle>
+                        <CardTitle className="text-3xl font-black tracking-tighter text-white mb-4">Account Created</CardTitle>
                         <CardDescription className="text-zinc-500 font-bold uppercase tracking-widest text-xs">
-                            Redirecting to login portal...
+                            Redirecting to sign in...
                         </CardDescription>
                     </Card>
                 </motion.div>
@@ -106,15 +124,15 @@ export default function RegisterPage() {
                         </div>
                     </motion.div>
                     <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic">
-                        Initialize <span className="text-accent">Aura</span>
+                        Create <span className="text-accent">Account</span>
                     </h1>
-                    <p className="text-zinc-500 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">New Stream Protocol</p>
+                    <p className="text-zinc-500 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Set up your workspace access</p>
                 </div>
 
                 <Card className="border-none shadow-3xl bg-white/5 dark:bg-zinc-900/40 backdrop-blur-2xl rounded-[3rem] overflow-hidden">
                     <CardHeader className="p-10 pb-4">
-                        <CardTitle className="text-2xl font-black tracking-tight text-white">Create Identity</CardTitle>
-                        <CardDescription className="text-zinc-500 font-medium">Define your neural presence in the nexus</CardDescription>
+                        <CardTitle className="text-2xl font-black tracking-tight text-white">Create Account</CardTitle>
+                        <CardDescription className="text-zinc-500 font-medium">Enter your details to start managing projects and tasks</CardDescription>
                     </CardHeader>
 
                     <form onSubmit={handleSubmit}>
@@ -134,12 +152,12 @@ export default function RegisterPage() {
 
                             <div className="grid gap-6">
                                 <div className="space-y-2 group">
-                                    <Label htmlFor="fullName" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-accent transition-colors">Neural Signature</Label>
+                                    <Label htmlFor="fullName" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-accent transition-colors">Full Name</Label>
                                     <div className="relative">
                                         <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 group-focus-within:text-accent transition-colors" />
                                         <Input
                                             id="fullName"
-                                            placeholder="Ex: Architect 01"
+                                            placeholder="Example: Jane Doe"
                                             value={fullName}
                                             onChange={(e) => setFullName(e.target.value)}
                                             required
@@ -149,13 +167,13 @@ export default function RegisterPage() {
                                 </div>
 
                                 <div className="space-y-2 group">
-                                    <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-accent transition-colors">Data Stream Address</Label>
+                                    <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-accent transition-colors">Email Address</Label>
                                     <div className="relative">
                                         <Shield className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 group-focus-within:text-accent transition-colors" />
                                         <Input
                                             id="email"
                                             type="email"
-                                            placeholder="reach@nexus.com"
+                                            placeholder="name@example.com"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             required
@@ -165,7 +183,7 @@ export default function RegisterPage() {
                                 </div>
 
                                 <div className="space-y-2 group">
-                                    <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-accent transition-colors">Encryption Key</Label>
+                                    <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-focus-within:text-accent transition-colors">Password</Label>
                                     <div className="relative">
                                         <Key className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 group-focus-within:text-accent transition-colors" />
                                         <Input
@@ -178,7 +196,7 @@ export default function RegisterPage() {
                                             className="h-12 pl-12 bg-white/5 dark:bg-black/20 border-white/10 rounded-2xl text-white placeholder:text-zinc-700 focus-visible:ring-1 focus-visible:ring-accent/50 transition-all font-medium"
                                         />
                                     </div>
-                                    <p className="text-[10px] font-bold text-zinc-600 italic px-2">Minimum 8 character synchronization protocol</p>
+                                    <p className="text-[10px] font-bold text-zinc-600 italic px-2">Minimum 8 characters required</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -191,16 +209,16 @@ export default function RegisterPage() {
                             >
                                 {isLoading ? <Loader2 className="animate-spin" /> : (
                                     <span className="flex items-center gap-2">
-                                        INITIATE IDENTITY <Zap size={16} fill="currentColor" />
+                                        Create Account <Zap size={16} fill="currentColor" />
                                     </span>
                                 )}
                             </Button>
 
                             <div className="text-center">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                                    Identity already exists?{' '}
+                                    Already have an account?{' '}
                                     <Link href="/login" className="text-accent hover:text-primary transition-colors underline decoration-2 underline-offset-4">
-                                        Initiate Login
+                                        Sign In
                                     </Link>
                                 </p>
                             </div>
