@@ -18,10 +18,10 @@ export default function RootPage() {
   }, [accessToken, router]);
 
   return (
-    <div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex h-screen items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-zinc-500 font-medium">Redirecting...</p>
+        <p className="text-sm font-medium text-foreground/55">Redirecting...</p>
       </div>
     </div>
   );

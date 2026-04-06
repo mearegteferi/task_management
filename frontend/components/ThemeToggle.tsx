@@ -3,21 +3,21 @@
 import { useTheme } from 'next-themes';
 import { Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function ThemeToggle() {
     const { theme, setTheme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
+    const mounted = useSyncExternalStore(
+        () => () => undefined,
+        () => true,
+        () => false
+    );
 
     if (!mounted) {
         return (
-            <Button variant="ghost" size="icon" className="w-10 h-10 rounded-full border border-border/50 bg-background/50 backdrop-blur-md">
-                <Sun className="h-5 w-5 text-zinc-400" />
+            <Button variant="outline" size="icon" className="h-10 w-10 rounded-lg">
+                <Sun className="h-4 w-4 text-foreground/45" />
             </Button>
         );
     }
@@ -27,7 +27,7 @@ export function ThemeToggle() {
             variant="ghost"
             size="icon"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="relative w-10 h-10 rounded-full border border-border/50 bg-background/50 backdrop-blur-md hover:bg-primary/10 transition-colors"
+            className="relative h-10 w-10 rounded-lg border border-border bg-card hover:bg-secondary"
         >
             <AnimatePresence mode="wait" initial={false}>
                 {theme === 'dark' ? (
@@ -38,7 +38,7 @@ export function ThemeToggle() {
                         exit={{ y: -20, opacity: 0, rotate: -45 }}
                         transition={{ duration: 0.2 }}
                     >
-                        <Moon className="h-5 w-5 text-indigo-400" />
+                        <Moon className="h-4 w-4 text-foreground" />
                     </motion.div>
                 ) : (
                     <motion.div
@@ -48,7 +48,7 @@ export function ThemeToggle() {
                         exit={{ y: -20, opacity: 0, rotate: -45 }}
                         transition={{ duration: 0.2 }}
                     >
-                        <Sun className="h-5 w-5 text-amber-500" />
+                        <Sun className="h-4 w-4 text-foreground" />
                     </motion.div>
                 )}
             </AnimatePresence>
