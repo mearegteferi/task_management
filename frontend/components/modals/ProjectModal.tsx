@@ -1,18 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Loader2, X } from 'lucide-react';
+
+import { ProjectMutationInput } from '@/services/project.service';
 import { ProjectResponse, ProjectStatus } from '@/types/api';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, X } from 'lucide-react';
 
 interface ProjectModalProps {
     project?: ProjectResponse | null;
     isOpen: boolean;
     onClose: () => void;
-    onSave: (data: any) => Promise<void>;
+    onSave: (data: ProjectMutationInput) => Promise<void>;
 }
 
 export function ProjectModal({ project, isOpen, onClose, onSave }: ProjectModalProps) {
@@ -39,11 +41,14 @@ export function ProjectModal({ project, isOpen, onClose, onSave }: ProjectModalP
         }
     }, [project, isOpen]);
 
-    if (!isOpen) return null;
+    if (!isOpen) {
+        return null;
+    }
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
         setIsSaving(true);
+
         try {
             await onSave({
                 title,
@@ -61,91 +66,91 @@ export function ProjectModal({ project, isOpen, onClose, onSave }: ProjectModalP
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-            <Card className="w-full max-w-lg shadow-2xl border-none bg-card/90 backdrop-blur-xl animate-in fade-in zoom-in duration-200 rounded-[2rem] overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between border-b border-border/50 pb-4 p-8">
-                    <CardTitle className="text-2xl font-black tracking-tighter">
-                        {project ? 'Refine' : 'Initiate'} <span className="text-primary italic">Orbit</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+            <Card className="w-full max-w-2xl shadow-2xl">
+                <CardHeader className="flex flex-row items-center justify-between border-b border-border">
+                    <CardTitle className="text-xl">
+                        {project ? 'Edit project' : 'New project'}
                     </CardTitle>
-                    <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <X size={20} />
+                    <Button variant="ghost" size="icon" onClick={onClose}>
+                        <X className="h-4 w-4" />
                     </Button>
                 </CardHeader>
+
                 <form onSubmit={handleSubmit}>
-                    <CardContent className="space-y-6 p-8">
+                    <CardContent className="space-y-5 pt-6">
                         <div className="space-y-2">
-                            <Label htmlFor="title" className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/50 ml-1">Orbit Label</Label>
+                            <Label htmlFor="project-title">Title</Label>
                             <Input
-                                id="title"
-                                placeholder="E.g. Website Evolution"
+                                id="project-title"
+                                placeholder="Website redesign"
                                 value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="h-12 bg-secondary/50 border-none rounded-2xl px-6 focus-visible:ring-primary shadow-inner font-bold"
+                                onChange={(event) => setTitle(event.target.value)}
                                 minLength={3}
                                 required
                             />
                         </div>
+
                         <div className="space-y-2">
-                            <Label htmlFor="description" className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/50 ml-1">Mission Intel</Label>
+                            <Label htmlFor="project-description">Description</Label>
                             <textarea
-                                id="description"
-                                className="flex min-h-[120px] w-full rounded-[1.5rem] border-none bg-secondary/50 px-6 py-4 text-sm font-bold shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all resize-none"
-                                placeholder="Define the trajectory of this mission..."
+                                id="project-description"
+                                className="min-h-32 w-full rounded-lg border border-input bg-input px-3 py-2 text-sm shadow-sm"
+                                placeholder="Add the project summary."
                                 value={description}
-                                onChange={(e) => setDescription(e.target.value)}
+                                onChange={(event) => setDescription(event.target.value)}
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+
+                        <div className="grid gap-4 md:grid-cols-3">
                             <div className="space-y-2">
-                                <Label htmlFor="status" className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/50 ml-1">Current State</Label>
+                                <Label htmlFor="project-status">Status</Label>
                                 <select
-                                    id="status"
-                                    className="flex h-12 w-full rounded-2xl border-none bg-secondary/50 px-6 text-sm font-bold shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all appearance-none cursor-pointer"
+                                    id="project-status"
+                                    className="flex h-10 w-full rounded-lg border border-input bg-input px-3 text-sm shadow-sm"
                                     value={status}
-                                    onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+                                    onChange={(event) => setStatus(event.target.value as ProjectStatus)}
                                 >
-                                    <option value="todo" className="dark:bg-background">PRE-START</option>
-                                    <option value="in_progress" className="dark:bg-background">ACTIVE FLOW</option>
-                                    <option value="done" className="dark:bg-background">SYNCHRONIZED</option>
+                                    <option value="todo">To do</option>
+                                    <option value="in_progress">In progress</option>
+                                    <option value="done">Done</option>
                                 </select>
                             </div>
+
                             <div className="space-y-2">
-                                <Label htmlFor="priority" className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/50 ml-1">Urgency</Label>
+                                <Label htmlFor="project-priority">Priority</Label>
                                 <select
-                                    id="priority"
-                                    className="flex h-12 w-full rounded-2xl border-none bg-secondary/50 px-6 text-sm font-bold shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all appearance-none cursor-pointer"
+                                    id="project-priority"
+                                    className="flex h-10 w-full rounded-lg border border-input bg-input px-3 text-sm shadow-sm"
                                     value={priority}
-                                    onChange={(e) => setPriority(parseInt(e.target.value))}
+                                    onChange={(event) => setPriority(Number(event.target.value))}
                                 >
-                                    <option value={1} className="dark:bg-background">FLOW</option>
-                                    <option value={2} className="dark:bg-background">STABLE</option>
-                                    <option value={3} className="dark:bg-background">URGENT</option>
+                                    <option value={1}>Low</option>
+                                    <option value={2}>Medium</option>
+                                    <option value={3}>High</option>
                                 </select>
                             </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="dueDate" className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/50 ml-1">Event Horizon</Label>
-                            <Input
-                                id="dueDate"
-                                type="date"
-                                value={dueDate}
-                                onChange={(e) => setDueDate(e.target.value)}
-                                className="h-12 bg-secondary/50 border-none rounded-2xl px-6 focus-visible:ring-primary shadow-inner font-bold"
-                                max="2099-12-31"
-                            />
+
+                            <div className="space-y-2">
+                                <Label htmlFor="project-due-date">Due date</Label>
+                                <Input
+                                    id="project-due-date"
+                                    type="date"
+                                    value={dueDate}
+                                    onChange={(event) => setDueDate(event.target.value)}
+                                    max="2099-12-31"
+                                />
+                            </div>
                         </div>
                     </CardContent>
-                    <CardFooter className="flex justify-end gap-3 p-8 pt-0">
-                        <Button type="button" variant="ghost" onClick={onClose} className="rounded-xl font-bold text-foreground/50 hover:text-foreground">
-                            ABORT
+
+                    <CardFooter className="justify-end gap-3 border-t border-border pt-6">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Cancel
                         </Button>
-                        <Button
-                            type="submit"
-                            disabled={isSaving || !title.trim()}
-                            className="rounded-2xl h-12 px-8 bg-primary font-black italic shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all text-white border-none"
-                        >
-                            {isSaving && <Loader2 size={18} className="mr-2 animate-spin" />}
-                            {project ? 'UPGRADE ORBIT' : 'LAUNCH ORBIT'}
+                        <Button type="submit" disabled={isSaving || !title.trim()}>
+                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            {project ? 'Save project' : 'Create project'}
                         </Button>
                     </CardFooter>
                 </form>
