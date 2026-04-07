@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { Loader2, X } from 'lucide-react';
+
 import { ProjectResponse } from '@/types/api';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, X, Zap } from 'lucide-react';
 
 interface TaskModalProps {
     projects: ProjectResponse[];
@@ -20,15 +21,19 @@ export function TaskModal({ projects, isOpen, onClose, onSave }: TaskModalProps)
     const [projectId, setProjectId] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
 
-    if (!isOpen) return null;
+    if (!isOpen) {
+        return null;
+    }
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!title.trim() || !projectId) return;
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!title.trim() || !projectId) {
+            return;
+        }
 
         setIsSaving(true);
         try {
-            await onSave(parseInt(projectId), { title });
+            await onSave(parseInt(projectId, 10), { title });
             setTitle('');
             setProjectId('');
             onClose();
@@ -40,61 +45,56 @@ export function TaskModal({ projects, isOpen, onClose, onSave }: TaskModalProps)
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-            <Card className="w-full max-w-lg shadow-2xl border-none bg-card/90 backdrop-blur-xl animate-in fade-in zoom-in duration-200 rounded-[2rem] overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between border-b border-border/50 pb-4 p-8">
-                    <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
-                            <Zap size={20} className="animate-pulse" />
-                        </div>
-                        <CardTitle className="text-2xl font-black tracking-tighter">Initiate <span className="text-primary italic">Stream</span></CardTitle>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <X size={20} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+            <Card className="w-full max-w-xl shadow-2xl">
+                <CardHeader className="flex flex-row items-center justify-between border-b border-border">
+                    <CardTitle className="text-xl">New task</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={onClose}>
+                        <X className="h-4 w-4" />
                     </Button>
                 </CardHeader>
+
                 <form onSubmit={handleSubmit}>
-                    <CardContent className="space-y-6 p-8">
+                    <CardContent className="space-y-5 pt-6">
                         <div className="space-y-2">
-                            <Label htmlFor="task-title" className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/50 ml-1">Stream Label</Label>
+                            <Label htmlFor="task-title">Title</Label>
                             <Input
                                 id="task-title"
-                                placeholder="E.g. Design System Audit"
+                                placeholder="Prepare launch checklist"
                                 value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="h-12 bg-secondary/50 border-none rounded-2xl px-6 focus-visible:ring-primary shadow-inner font-bold"
+                                onChange={(event) => setTitle(event.target.value)}
                                 required
                             />
                         </div>
+
                         <div className="space-y-2">
-                            <Label htmlFor="project-id" className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/50 ml-1">Parent Orbit</Label>
+                            <Label htmlFor="task-project-id">Project</Label>
                             <select
-                                id="project-id"
-                                className="flex h-12 w-full rounded-2xl border-none bg-secondary/50 px-6 py-2 text-sm font-bold shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:focus-visible:ring-primary transition-all appearance-none cursor-pointer"
+                                id="task-project-id"
+                                className="flex h-10 w-full rounded-lg border border-input bg-input px-3 text-sm shadow-sm"
                                 value={projectId}
-                                onChange={(e) => setProjectId(e.target.value)}
+                                onChange={(event) => setProjectId(event.target.value)}
                                 required
                             >
-                                <option value="" disabled className="dark:bg-background">Select an orbit...</option>
-                                {projects.map((p) => (
-                                    <option key={p.id} value={p.id} className="dark:bg-background">
-                                        {p.title.toUpperCase()}
+                                <option value="" disabled>
+                                    Select a project
+                                </option>
+                                {projects.map((project) => (
+                                    <option key={project.id} value={project.id}>
+                                        {project.title}
                                     </option>
                                 ))}
                             </select>
                         </div>
                     </CardContent>
-                    <CardFooter className="flex justify-end gap-3 p-8 pt-0">
-                        <Button type="button" variant="ghost" onClick={onClose} className="rounded-xl font-bold text-foreground/50 hover:text-foreground">
-                            ABORT
+
+                    <CardFooter className="justify-end gap-3 border-t border-border pt-6">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Cancel
                         </Button>
-                        <Button
-                            type="submit"
-                            disabled={isSaving || !title.trim() || !projectId}
-                            className="rounded-2xl h-12 px-8 bg-primary font-black italic shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all text-white border-none"
-                        >
-                            {isSaving && <Loader2 size={18} className="mr-2 animate-spin" />}
-                            INITIATE FLOW
+                        <Button type="submit" disabled={isSaving || !title.trim() || !projectId}>
+                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            Create task
                         </Button>
                     </CardFooter>
                 </form>
