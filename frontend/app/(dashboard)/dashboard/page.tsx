@@ -1,179 +1,460 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuthStore } from '@/store/authStore';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+    AlertTriangle,
+    ArrowRight,
+    Briefcase,
+    CheckCircle2,
+    ChevronRight,
+    CircleSlash,
+    Loader2,
+    Plus,
+    Search,
+} from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { analyticsService } from '@/services/analytics.service';
-import { AnalyticsResponse } from '@/types/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Briefcase, CheckSquare, TrendingUp, Zap, Clock, Star, Sparkles, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { projectService } from '@/services/project.service';
+import { taskService } from '@/services/task.service';
+import { AnalyticsResponse, ProjectResponse, TaskResponse } from '@/types/api';
 
-const container = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1
-        }
+type WorkItem = TaskResponse & {
+    projectTitle: string;
+    projectDueDate: string | null;
+    projectStatus: ProjectResponse['status'];
+};
+
+function formatProjectStatus(status: ProjectResponse['status']) {
+    switch (status) {
+        case 'in_progress':
+            return 'In progress';
+        case 'done':
+            return 'Done';
+        default:
+            return 'To do';
     }
-};
+}
 
-const item = {
-    hidden: { y: 20, opacity: 0 },
-    show: { y: 0, opacity: 1 }
-};
+function formatShortDate(value: string | null) {
+    if (!value) {
+        return 'No due date';
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+    }).format(new Date(value));
+}
+
+function getRelativeDueLabel(value: string | null) {
+    if (!value) {
+        return 'No due date';
+    }
+
+    const due = new Date(value);
+    const today = new Date();
+    due.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((due.getTime() - today.getTime()) / 86400000);
+
+    if (diffDays < 0) {
+        return `${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'} overdue`;
+    }
+    if (diffDays === 0) {
+        return 'Due today';
+    }
+    if (diffDays === 1) {
+        return 'Due tomorrow';
+    }
+
+    return `Due in ${diffDays} days`;
+}
+
+function getPriorityLabel(priority: number) {
+    switch (priority) {
+        case 3:
+            return 'High';
+        case 2:
+            return 'Medium';
+        default:
+            return 'Low';
+    }
+}
+
+function isTypingTarget(target: EventTarget | null) {
+    if (!(target instanceof HTMLElement)) {
+        return false;
+    }
+
+    const tagName = target.tagName;
+    return tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable;
+}
 
 export default function DashboardPage() {
+    const router = useRouter();
+    const searchRef = useRef<HTMLInputElement | null>(null);
     const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+    const [projects, setProjects] = useState<ProjectResponse[]>([]);
+    const [tasks, setTasks] = useState<WorkItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [query, setQuery] = useState('');
+
+    const fetchWorkspace = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const [analyticsData, projectData] = await Promise.all([
+                analyticsService.getAnalytics(),
+                projectService.getProjects(),
+            ]);
+
+            const taskResults = await Promise.all(
+                projectData.map(async (project) => {
+                    const projectTasks = await taskService.getTasks(project.id);
+                    return projectTasks.map((task) => ({
+                        ...task,
+                        projectTitle: project.title,
+                        projectDueDate: project.due_date,
+                        projectStatus: project.status,
+                    }));
+                })
+            );
+
+            setAnalytics(analyticsData);
+            setProjects(projectData);
+            setTasks(taskResults.flat());
+        } catch (fetchError) {
+            console.error('Failed to load dashboard:', fetchError);
+            setError('The dashboard could not be loaded right now.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchAnalytics = async () => {
-            try {
-                const data = await analyticsService.getAnalytics();
-                setAnalytics(data);
-            } catch (error) {
-                console.error('Failed to fetch analytics:', error);
-            } finally {
-                setIsLoading(false);
+        fetchWorkspace();
+    }, [fetchWorkspace]);
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (isTypingTarget(event.target)) {
+                return;
+            }
+
+            if (event.key === '/') {
+                event.preventDefault();
+                searchRef.current?.focus();
+            }
+
+            if (event.key.toLowerCase() === 'p') {
+                event.preventDefault();
+                void router.push('/projects');
+            }
+
+            if (event.key.toLowerCase() === 't') {
+                event.preventDefault();
+                void router.push('/tasks');
             }
         };
 
-        fetchAnalytics();
-    }, []);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [router]);
+
+    const filteredTasks = useMemo(() => {
+        const lowered = query.trim().toLowerCase();
+        const openTasks = tasks.filter((task) => !task.is_completed);
+
+        const sorted = [...openTasks].sort((left, right) => {
+            if (right.priority !== left.priority) {
+                return right.priority - left.priority;
+            }
+
+            if (left.projectDueDate && right.projectDueDate) {
+                return new Date(left.projectDueDate).getTime() - new Date(right.projectDueDate).getTime();
+            }
+
+            if (left.projectDueDate) {
+                return -1;
+            }
+
+            if (right.projectDueDate) {
+                return 1;
+            }
+
+            return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+        });
+
+        if (!lowered) {
+            return sorted.slice(0, 8);
+        }
+
+        return sorted
+            .filter((task) =>
+                task.title.toLowerCase().includes(lowered)
+                || task.projectTitle.toLowerCase().includes(lowered)
+                || task.description?.toLowerCase().includes(lowered)
+            )
+            .slice(0, 8);
+    }, [query, tasks]);
+
+    const atRiskProjects = useMemo(() => {
+        return [...projects]
+            .filter((project) => project.status !== 'done')
+            .filter((project) => {
+                if (!project.due_date) {
+                    return false;
+                }
+
+                const days = Math.round((new Date(project.due_date).getTime() - Date.now()) / 86400000);
+                return days <= 7;
+            })
+            .sort((left, right) => {
+                if (!left.due_date || !right.due_date) {
+                    return 0;
+                }
+                return new Date(left.due_date).getTime() - new Date(right.due_date).getTime();
+            })
+            .slice(0, 5);
+    }, [projects]);
+
+    const recentProjects = useMemo(() => {
+        return [...projects]
+            .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+            .slice(0, 4);
+    }, [projects]);
 
     if (isLoading) {
         return (
-            <div className="flex h-full items-center justify-center bg-background/50 backdrop-blur-sm">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-7 w-7 animate-spin text-primary" />
             </div>
         );
     }
 
-    const stats = [
-        { title: 'Total Projects', value: analytics?.total_projects || 0, icon: Briefcase, color: 'from-blue-500 to-cyan-500', label: 'Active in workspace' },
-        { title: 'Task Progress', value: analytics?.total_tasks || 0, icon: CheckSquare, color: 'from-indigo-500 to-violet-500', label: 'Across all streams' },
-        { title: 'Productivity', value: '84%', icon: TrendingUp, color: 'from-accent to-pink-500', label: 'Completion efficiency' },
+    if (error) {
+        return (
+            <div className="space-y-4">
+                <div className="max-w-xl rounded-lg border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle className="mt-0.5 h-4 w-4" />
+                        <div>
+                            <p className="font-semibold">Dashboard unavailable</p>
+                            <p className="mt-1">{error}</p>
+                        </div>
+                    </div>
+                </div>
+                <Button onClick={fetchWorkspace}>Retry</Button>
+            </div>
+        );
+    }
+
+    const summaryCards = [
+        {
+            label: 'Open tasks',
+            value: analytics?.total_tasks ? analytics.total_tasks - analytics.completed_tasks : 0,
+            note: 'Tasks not completed',
+        },
+        {
+            label: 'Completed',
+            value: `${analytics?.task_completion_rate || 0}%`,
+            note: `${analytics?.completed_tasks || 0} tasks done`,
+        },
+        {
+            label: 'Overdue projects',
+            value: analytics?.overdue_projects || 0,
+            note: 'Need attention',
+        },
+        {
+            label: 'Active projects',
+            value: analytics?.active_projects || 0,
+            note: 'In progress',
+        },
     ];
 
     return (
-        <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="space-y-8 p-1"
-        >
-            <div className="flex flex-col gap-1">
-                <h1 className="text-4xl font-black tracking-tighter text-foreground">
-                    Dashboard <span className="text-primary italic">Overview</span>
-                </h1>
-                <p className="text-foreground/50 text-sm font-medium flex items-center gap-2">
-                    <Sparkles size={14} className="text-accent" />
-                    Welcome back! Here&apos;s your productivity aura today.
-                </p>
+        <div className="page-shell">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="space-y-1">
+                    <h1 className="text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+                    <p className="text-sm text-muted-foreground">
+                        Review open work, upcoming deadlines, and recent projects.
+                    </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                    <Button asChild variant="outline">
+                        <Link href="/tasks">View tasks</Link>
+                    </Button>
+                    <Button asChild>
+                        <Link href="/projects">
+                            <Plus className="h-4 w-4" />
+                            New project
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-3">
-                {stats.map((stat, idx) => (
-                    <motion.div key={idx} variants={item}>
-                        <Card className="relative overflow-hidden group border-none shadow-2xl shadow-primary/5 bg-card/50 backdrop-blur-xl">
-                            <div className={stat.color + " absolute top-0 left-0 w-1 h-full opacity-70"}></div>
-                            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-xs uppercase font-bold tracking-widest text-foreground/50">{stat.title}</CardTitle>
-                                <div className={stat.color + " p-2 rounded-xl bg-gradient-to-br text-white shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform"}>
-                                    <stat.icon size={16} />
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-3xl font-black tracking-tighter text-foreground">{stat.value}</div>
-                                <p className="text-[10px] font-bold text-foreground/40 mt-1 uppercase tracking-tighter">{stat.label}</p>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
+            <section className="grid gap-4 lg:grid-cols-4">
+                {summaryCards.map((item) => (
+                    <div key={item.label} className="panel p-5">
+                        <p className="text-sm font-medium text-muted-foreground">{item.label}</p>
+                        <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{item.value}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{item.note}</p>
+                    </div>
                 ))}
-            </div>
+            </section>
 
-            <div className="grid gap-6 lg:grid-cols-7">
-                <motion.div variants={item} className="lg:col-span-4">
-                    <Card className="h-[400px] border-none shadow-2xl shadow-primary/5 bg-card/50 backdrop-blur-xl overflow-hidden flex flex-col">
-                        <CardHeader className="border-b border-border/50 bg-secondary/30">
-                            <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2">
-                                <Zap size={18} className="text-accent" />
-                                Project Velocity
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 flex items-end justify-around p-8 pb-12">
-                            {analytics?.projects_by_status.map((stat) => (
-                                <div key={stat.status} className="flex flex-col items-center gap-4 group h-full justify-end">
-                                    <div className="relative w-14">
-                                        <motion.div
-                                            initial={{ height: 0 }}
-                                            animate={{ height: `${(stat.count / (analytics.total_projects || 1)) * 100}%` }}
-                                            transition={{ duration: 1, ease: "easeOut" }}
-                                            className="w-full rounded-2xl bg-gradient-to-t from-primary to-accent shadow-xl shadow-primary/20 group-hover:brightness-110 transition-all cursor-pointer min-h-[8px]"
-                                        />
-                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 text-white text-[10px] px-2 py-1 rounded-md font-bold">
-                                            {stat.count}
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.95fr)]">
+                <section className="panel overflow-hidden">
+                    <div className="flex flex-col gap-4 border-b border-border px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                                <Briefcase className="h-4 w-4 text-primary" />
+                                <h2 className="text-base font-semibold text-foreground">Open tasks</h2>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                                The next open tasks, sorted by priority and deadline.
+                            </p>
+                        </div>
+
+                        <div className="relative w-full sm:w-80">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/35" />
+                            <Input
+                                ref={searchRef}
+                                value={query}
+                                onChange={(event) => setQuery(event.target.value)}
+                                placeholder="Search tasks"
+                                className="pl-9"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-[minmax(0,1.6fr)_160px_120px_100px_40px] gap-3 border-b border-border px-5 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        <span>Task</span>
+                        <span>Project</span>
+                        <span>Due</span>
+                        <span>Priority</span>
+                        <span></span>
+                    </div>
+
+                    <div>
+                        {filteredTasks.length === 0 ? (
+                            <div className="px-5 py-10 text-sm text-muted-foreground">
+                                No tasks match this search.
+                            </div>
+                        ) : (
+                            filteredTasks.map((task) => (
+                                <Link
+                                    key={task.id}
+                                    href={`/projects/${task.project_id}`}
+                                    className="grid grid-cols-[minmax(0,1.6fr)_160px_120px_100px_40px] gap-3 border-b border-border px-5 py-4 transition-colors hover:bg-secondary/60"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-start gap-2">
+                                            {task.priority === 3 ? (
+                                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+                                            ) : task.projectStatus === 'done' ? (
+                                                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                                            ) : (
+                                                <CircleSlash className="mt-0.5 h-4 w-4 shrink-0 text-foreground/30" />
+                                            )}
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
+                                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                    {task.description || 'No description'}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-foreground/50 group-hover:text-primary transition-colors whitespace-nowrap">
-                                        {stat.status.replace('_', ' ')}
-                                    </span>
-                                </div>
-                            ))}
-                        </CardContent>
-                    </Card>
-                </motion.div>
-
-                <motion.div variants={item} className="lg:col-span-3">
-                    <Card className="h-[400px] border-none shadow-2xl shadow-primary/5 bg-card/50 backdrop-blur-xl overflow-hidden flex flex-col">
-                        <CardHeader className="border-b border-border/50 bg-secondary/30">
-                            <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2">
-                                <Clock size={18} className="text-primary" />
-                                Priority Spectrum
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-6">
-                            <div className="space-y-4">
-                                {[
-                                    { label: 'High Priority', val: 75, color: 'bg-red-500' },
-                                    { label: 'Standard', val: 45, color: 'bg-primary' },
-                                    { label: 'Low Urgency', val: 20, color: 'bg-zinc-400' }
-                                ].map((p, i) => (
-                                    <div key={i} className="space-y-1.5">
-                                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-foreground/50">
-                                            <span>{p.label}</span>
-                                            <span>{p.val}%</span>
-                                        </div>
-                                        <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                                            <motion.div
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${p.val}%` }}
-                                                transition={{ duration: 1, delay: 0.5 + (i * 0.1) }}
-                                                className={cn("h-full rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)]", p.color)}
-                                            />
-                                        </div>
+                                    <div className="text-sm text-foreground/80">{task.projectTitle}</div>
+                                    <div>
+                                        <p className="text-sm text-foreground">{formatShortDate(task.projectDueDate)}</p>
+                                        <p className="mt-0.5 text-xs text-muted-foreground">{getRelativeDueLabel(task.projectDueDate)}</p>
                                     </div>
-                                ))}
-                            </div>
+                                    <div className="text-sm text-foreground/80">{getPriorityLabel(task.priority)}</div>
+                                    <div className="flex items-center justify-end text-foreground/30">
+                                        <ChevronRight className="h-4 w-4" />
+                                    </div>
+                                </Link>
+                            ))
+                        )}
+                    </div>
+                </section>
 
-                            <div className="mt-8 p-4 rounded-2xl bg-accent/5 border border-accent/10 flex items-center gap-4">
-                                <div className="h-12 w-12 rounded-xl bg-accent/20 flex items-center justify-center text-accent">
-                                    <Star size={24} fill="currentColor" />
-                                </div>
-                                <div>
-                                    <span className="text-xs font-black uppercase tracking-widest text-accent">Optimization Tip</span>
-                                    <p className="text-[11px] font-medium text-foreground/50 leading-tight mt-0.5">Focus on 2 high-priority tasks today to maximize your aura.</p>
-                                </div>
+                <div className="space-y-5">
+                    <section className="panel p-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h2 className="text-base font-semibold text-foreground">Upcoming deadlines</h2>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Projects due within the next 7 days.
+                                </p>
                             </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
+                            <Button asChild variant="ghost" size="sm">
+                                <Link href="/projects">View all</Link>
+                            </Button>
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                            {atRiskProjects.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">No projects are close to their due date.</p>
+                            ) : (
+                                atRiskProjects.map((project) => (
+                                    <Link
+                                        key={project.id}
+                                        href={`/projects/${project.id}`}
+                                        className="block rounded-lg border border-border bg-secondary/35 px-4 py-3 transition-colors hover:bg-secondary"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-medium text-foreground">{project.title}</p>
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    {formatProjectStatus(project.status)}
+                                                </p>
+                                            </div>
+                                            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                                                {getRelativeDueLabel(project.due_date)}
+                                            </span>
+                                        </div>
+                                    </Link>
+                                ))
+                            )}
+                        </div>
+                    </section>
+
+                    <section className="panel p-5">
+                        <h2 className="text-base font-semibold text-foreground">Recent projects</h2>
+                        <div className="mt-4 space-y-2">
+                            {recentProjects.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">No projects yet.</p>
+                            ) : (
+                                recentProjects.map((project) => (
+                                    <Link
+                                        key={project.id}
+                                        href={`/projects/${project.id}`}
+                                        className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-secondary"
+                                    >
+                                        <div>
+                                            <p className="text-sm font-medium text-foreground">{project.title}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Created {formatShortDate(project.created_at)}
+                                            </p>
+                                        </div>
+                                        <ArrowRight className="h-4 w-4 text-foreground/30" />
+                                    </Link>
+                                ))
+                            )}
+                        </div>
+                    </section>
+                </div>
             </div>
-        </motion.div>
+        </div>
     );
-}
-
-function cn(...inputs: any[]) {
-    return inputs.filter(Boolean).join(' ');
 }
