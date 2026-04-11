@@ -28,18 +28,22 @@ from app.core.redis import clear_cache_pattern
 class ArchitectService:
     @staticmethod
     def _draft_key(session_id: str) -> str:
+        # Build the Redis key for the saved draft.
         return f'architect:{session_id}:draft_tasks'
 
     @staticmethod
     def _history_key(session_id: str) -> str:
+        # Build the Redis key for saved chat history.
         return f'architect:{session_id}:chat_history'
 
     @staticmethod
     def _owner_key(session_id: str) -> str:
+        # Build the Redis key for the session owner.
         return f'architect:{session_id}:owner'
 
     @staticmethod
     def _build_initial_prompt(project_request: SuggestProjectRequest) -> str:
+        # Turn the first project request into an AI prompt.
         lines = [
             'Create a project breakdown from the following request.',
             f'Title: {project_request.title}',
@@ -65,6 +69,7 @@ class ArchitectService:
     def _build_feedback_prompt(
         current_draft: ProjectBreakdown, feedback: ArchitectChatRequest
     ) -> str:
+        # Turn draft feedback into a revision prompt for the AI.
         return '\n'.join(
             [
                 'Revise the current project breakdown using the feedback below.',
@@ -78,10 +83,12 @@ class ArchitectService:
 
     @staticmethod
     def _derive_project_priority(draft: ProjectBreakdown) -> int:
+        # Pick the highest task priority as the project priority.
         return max((task.estimated_priority for task in draft.tasks), default=1)
 
     @staticmethod
     def _format_persistence_error(exc: Exception) -> str | None:
+        # Translate common database schema errors into a clearer message.
         message = str(exc).lower()
 
         if (
@@ -108,6 +115,7 @@ class ArchitectService:
         draft: ProjectBreakdown,
         raw_history: bytes,
     ) -> None:
+        # Save the draft, chat history, and owner in Redis.
         ttl = settings.AI_ARCHITECT_STATE_TTL_SECONDS
         await redis.set(cls._draft_key(session_id), draft.model_dump_json(), ex=ttl)
         await redis.set(
@@ -119,6 +127,7 @@ class ArchitectService:
     async def _assert_session_owner(
         cls, redis: Redis, session_id: str, user_id: uuid.UUID
     ) -> None:
+        # Make sure the draft session belongs to the current user.
         owner_id = await redis.get(cls._owner_key(session_id))
         if not owner_id:
             raise HTTPException(
@@ -136,6 +145,7 @@ class ArchitectService:
     async def _get_draft(
         cls, redis: Redis, user_id: uuid.UUID, session_id: str
     ) -> ProjectBreakdown:
+        # Load the saved draft for the current user.
         await cls._assert_session_owner(redis, session_id, user_id)
         raw_draft = await redis.get(cls._draft_key(session_id))
         if not raw_draft:
@@ -150,6 +160,7 @@ class ArchitectService:
     async def _get_history(
         cls, redis: Redis, user_id: uuid.UUID, session_id: str
     ) -> list[object]:
+        # Load the saved chat history for the current user.
         await cls._assert_session_owner(redis, session_id, user_id)
         raw_history = await redis.get(cls._history_key(session_id))
         if not raw_history:
@@ -175,6 +186,7 @@ class ArchitectService:
     async def _clear_state(
         cls, redis: Redis, user_id: uuid.UUID, session_id: str
     ) -> None:
+        # Remove the saved draft state after it is no longer needed.
         await cls._assert_session_owner(redis, session_id, user_id)
         await redis.delete(
             cls._draft_key(session_id),
@@ -186,6 +198,7 @@ class ArchitectService:
     async def _run_agent(
         prompt: str, message_history: list[object] | None = None
     ) -> Any:
+        # Run the AI agent and normalize provider errors.
         try:
             agent = get_architect_agent()
             return await agent.run(prompt, message_history=message_history)
@@ -213,6 +226,7 @@ class ArchitectService:
         user_id: uuid.UUID,
         project_request: SuggestProjectRequest,
     ) -> tuple[str, ProjectBreakdown]:
+        # Create a new draft and store its session state.
         session_id = str(uuid.uuid4())
         result = await cls._run_agent(cls._build_initial_prompt(project_request))
         draft = result.output
@@ -228,6 +242,7 @@ class ArchitectService:
         user_id: uuid.UUID,
         feedback: ArchitectChatRequest,
     ) -> ProjectBreakdown:
+        # Revise an existing draft using saved history and feedback.
         current_draft = await cls._get_draft(redis, user_id, feedback.session_id)
         history = await cls._get_history(redis, user_id, feedback.session_id)
 
@@ -253,6 +268,7 @@ class ArchitectService:
         user_id: uuid.UUID,
         confirm_request: ArchitectConfirmRequest,
     ) -> ArchitectConfirmResponse:
+        # Save the approved draft as a project and its tasks.
         draft = await cls._get_draft(redis, user_id, confirm_request.session_id)
         project_priority = confirm_request.priority or cls._derive_project_priority(
             draft

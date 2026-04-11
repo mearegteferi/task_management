@@ -32,7 +32,6 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024
 
     GEMINI_API_KEY: str | None = None
-    OLLAMA_BASE_URL: str = 'http://localhost:11434/v1'
     OPENAI_API_KEY: str | None = None
     PYDANTIC_AI_GATEWAY_API_KEY: str | None = None
     AI_ARCHITECT_MODEL: str = 'google-gla:gemini-2.5-flash-lite'

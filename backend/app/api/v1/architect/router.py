@@ -22,6 +22,7 @@ async def suggest_project_breakdown(
     current_user: CurrentUser,
     redis: Redis = Depends(get_redis),
 ) -> ArchitectDraftResponse:
+    # Create the first AI draft for a project idea.
     session_id, draft = await ArchitectService.suggest(
         redis, current_user.id, project_request
     )
@@ -34,6 +35,7 @@ async def refine_project_breakdown(
     current_user: CurrentUser,
     redis: Redis = Depends(get_redis),
 ) -> ArchitectDraftResponse:
+    # Update an existing AI draft using user feedback.
     draft = await ArchitectService.chat(redis, current_user.id, feedback)
     return ArchitectDraftResponse(session_id=feedback.session_id, draft=draft)
 
@@ -49,6 +51,7 @@ async def confirm_project_breakdown(
     redis: Redis = Depends(get_redis),
     db: AsyncSession = Depends(get_db),
 ) -> ArchitectConfirmResponse:
+    # Save the approved AI draft as a real project and tasks.
     return await ArchitectService.confirm(
         db,
         redis,
