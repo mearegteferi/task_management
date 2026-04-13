@@ -8,6 +8,7 @@ from starlette.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core import redis as redis_module
 from app.core.config import settings
+from app.core.observability import configure_observability
 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
@@ -32,6 +33,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
+configure_observability(app)
 
 if settings.all_cors_origins:
     app.add_middleware(

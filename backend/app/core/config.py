@@ -33,10 +33,20 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
+    XAI_API_KEY: str | None = None
     PYDANTIC_AI_GATEWAY_API_KEY: str | None = None
-    AI_ARCHITECT_MODEL: str = 'google-gla:gemini-2.5-flash-lite'
+    AI_ARCHITECT_MODEL: str | None = None
+    AI_MODELS: list[str] = [
+        'google-gla:gemini-2.5-flash-lite',
+        'openai:gpt-4o-mini',
+        'xai:grok-2',
+    ]
+    AI_MAX_RETRIES: int = 2
+    AI_TIMEOUT_SECONDS: float = 30.0
     AI_ARCHITECT_SYSTEM_PROMPT: str | None = None
     AI_ARCHITECT_STATE_TTL_SECONDS: int = 60 * 60 * 24
+    LOGFIRE_API_KEY: str | None = None
+    LOGFIRE_PROJECT_NAME: str | None = None
 
     BACKEND_CORS_ORIGINS: list[str] = []
     FRONTEND_HOST: str = 'http://localhost:3000'
@@ -64,8 +74,12 @@ class Settings(BaseSettings):
         'EMAILS_FROM_NAME',
         'GEMINI_API_KEY',
         'OPENAI_API_KEY',
+        'XAI_API_KEY',
         'PYDANTIC_AI_GATEWAY_API_KEY',
+        'AI_ARCHITECT_MODEL',
         'AI_ARCHITECT_SYSTEM_PROMPT',
+        'LOGFIRE_API_KEY',
+        'LOGFIRE_PROJECT_NAME',
         'INITIAL_SUPERUSER_PASSWORD',
         mode='before',
     )
@@ -74,6 +88,22 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @field_validator('AI_MODELS', mode='before')
+    @classmethod
+    def _parse_ai_models(cls, value: str | list[str] | None) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            if stripped.startswith('['):
+                import json
+
+                return [model.strip() for model in json.loads(stripped) if model.strip()]
+            return [model.strip() for model in stripped.split(',') if model.strip()]
+        return [model.strip() for model in value if model.strip()]
 
     @field_validator('BACKEND_CORS_ORIGINS', mode='before')
     @classmethod
@@ -95,6 +125,8 @@ class Settings(BaseSettings):
     def _set_default_emails_from(self) -> Self:
         if not self.EMAILS_FROM_NAME:
             self.EMAILS_FROM_NAME = self.PROJECT_NAME
+        if self.AI_ARCHITECT_MODEL and self.AI_ARCHITECT_MODEL not in self.AI_MODELS:
+            self.AI_MODELS = [self.AI_ARCHITECT_MODEL, *self.AI_MODELS]
         return self
 
     @computed_field

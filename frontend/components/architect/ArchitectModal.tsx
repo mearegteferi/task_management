@@ -15,20 +15,39 @@ import { ArchitectChatMessage, ProjectBreakdown } from '@/types/api';
 
 type ArchitectStep = 'setup' | 'refinement';
 
+interface ArchitectErrorState {
+    message: string;
+    requestId: string | null;
+}
+
 interface ArchitectModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-function getArchitectErrorMessage(error: unknown, fallback: string): string {
+function getArchitectError(error: unknown, fallback: string): ArchitectErrorState {
     if (axios.isAxiosError(error)) {
         const detail = error.response?.data?.detail;
-        if (typeof detail === 'string' && detail.trim()) {
-            return detail;
+        const requestId = error.response?.headers?.['x-request-id'] ?? null;
+
+        if (error.response?.status === 503) {
+            return {
+                message:
+                    typeof detail === 'string' && detail.trim()
+                        ? detail
+                        : 'The AI architect is temporarily unavailable across all configured models. Please try again shortly.',
+                requestId,
+            };
         }
+
+        if (typeof detail === 'string' && detail.trim()) {
+            return { message: detail, requestId };
+        }
+
+        return { message: fallback, requestId };
     }
 
-    return fallback;
+    return { message: fallback, requestId: null };
 }
 
 function createMessage(
@@ -54,6 +73,38 @@ function summarizeDraft(
     return `Draft updated. It now includes ${breakdown.tasks.length} task${breakdown.tasks.length === 1 ? '' : 's'}.`;
 }
 
+function normalizeListInput(value: string): string[] {
+    return value
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function buildInitialRequestSummary(options: {
+    title: string;
+    description: string;
+    goals: string[];
+    constraints: string[];
+    additionalContext: string;
+}): string {
+    const segments = [`Create a project draft for "${options.title}".`];
+
+    if (options.description) {
+        segments.push(options.description);
+    }
+    if (options.goals.length > 0) {
+        segments.push(`Goals: ${options.goals.join('; ')}.`);
+    }
+    if (options.constraints.length > 0) {
+        segments.push(`Constraints: ${options.constraints.join('; ')}.`);
+    }
+    if (options.additionalContext) {
+        segments.push(`Context: ${options.additionalContext}`);
+    }
+
+    return segments.join(' ');
+}
+
 export function ArchitectModal({ isOpen, onClose }: ArchitectModalProps) {
     const router = useRouter();
 
@@ -63,8 +114,11 @@ export function ArchitectModal({ isOpen, onClose }: ArchitectModalProps) {
     const [messages, setMessages] = useState<ArchitectChatMessage[]>([]);
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [goals, setGoals] = useState('');
+    const [constraints, setConstraints] = useState('');
+    const [additionalContext, setAdditionalContext] = useState('');
     const [chatInput, setChatInput] = useState('');
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<ArchitectErrorState | null>(null);
     const [isStarting, setIsStarting] = useState(false);
     const [isChatting, setIsChatting] = useState(false);
     const [isLaunching, setIsLaunching] = useState(false);
@@ -89,6 +143,9 @@ export function ArchitectModal({ isOpen, onClose }: ArchitectModalProps) {
         setMessages([]);
         setTitle('');
         setDescription('');
+        setGoals('');
+        setConstraints('');
+        setAdditionalContext('');
         setChatInput('');
         setError(null);
         setIsStarting(false);
@@ -107,32 +164,41 @@ export function ArchitectModal({ isOpen, onClose }: ArchitectModalProps) {
             return;
         }
 
+        const normalizedGoals = normalizeListInput(goals);
+        const normalizedConstraints = normalizeListInput(constraints);
+        const trimmedDescription = description.trim();
+        const trimmedAdditionalContext = additionalContext.trim();
+
         setIsStarting(true);
         setError(null);
 
         try {
-            const response = await architectService.suggest(
-                title.trim(),
-                description.trim()
-            );
+            const response = await architectService.suggest({
+                title: title.trim(),
+                description: trimmedDescription || null,
+                goals: normalizedGoals,
+                constraints: normalizedConstraints,
+                additional_context: trimmedAdditionalContext || null,
+            });
 
             setSessionId(response.session_id);
             setBreakdown(response.draft);
             setMessages([
                 createMessage(
                     'user',
-                    `Create a project draft for "${title.trim()}". ${description.trim() || 'No description provided.'}`
+                    buildInitialRequestSummary({
+                        title: title.trim(),
+                        description: trimmedDescription,
+                        goals: normalizedGoals,
+                        constraints: normalizedConstraints,
+                        additionalContext: trimmedAdditionalContext,
+                    })
                 ),
                 createMessage('assistant', summarizeDraft(response.draft, 'initial')),
             ]);
             setStep('refinement');
         } catch (caughtError) {
-            setError(
-                getArchitectErrorMessage(
-                    caughtError,
-                    'The draft could not be created right now.'
-                )
-            );
+            setError(getArchitectError(caughtError, 'The draft could not be created right now.'));
             console.error('Failed to generate architect draft:', caughtError);
         } finally {
             setIsStarting(false);
@@ -165,12 +231,7 @@ export function ArchitectModal({ isOpen, onClose }: ArchitectModalProps) {
                 ...current,
                 createMessage('assistant', 'The draft could not be updated. Please try again.'),
             ]);
-            setError(
-                getArchitectErrorMessage(
-                    caughtError,
-                    'The draft could not be updated.'
-                )
-            );
+            setError(getArchitectError(caughtError, 'The draft could not be updated.'));
             console.error('Failed to refine architect draft:', caughtError);
         } finally {
             setIsChatting(false);
@@ -194,7 +255,7 @@ export function ArchitectModal({ isOpen, onClose }: ArchitectModalProps) {
             });
         } catch (caughtError) {
             setError(
-                getArchitectErrorMessage(
+                getArchitectError(
                     caughtError,
                     'The project could not be created from this draft.'
                 )
@@ -262,7 +323,14 @@ export function ArchitectModal({ isOpen, onClose }: ArchitectModalProps) {
                     {error && (
                         <div className="mx-6 mt-5 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200">
                             <AlertCircle className="mt-0.5 h-4 w-4" />
-                            <span>{error}</span>
+                            <div className="space-y-1">
+                                <p>{error.message}</p>
+                                {error.requestId ? (
+                                    <p className="text-xs text-red-600/80 dark:text-red-200/80">
+                                        Request ID: {error.requestId}
+                                    </p>
+                                ) : null}
+                            </div>
                         </div>
                     )}
 
@@ -280,9 +348,15 @@ export function ArchitectModal({ isOpen, onClose }: ArchitectModalProps) {
                                     <ArchitectSetup
                                         title={title}
                                         description={description}
+                                        goals={goals}
+                                        constraints={constraints}
+                                        additionalContext={additionalContext}
                                         isLoading={isStarting}
                                         onTitleChange={setTitle}
                                         onDescriptionChange={setDescription}
+                                        onGoalsChange={setGoals}
+                                        onConstraintsChange={setConstraints}
+                                        onAdditionalContextChange={setAdditionalContext}
                                         onSubmit={handleStart}
                                     />
                                 </motion.div>

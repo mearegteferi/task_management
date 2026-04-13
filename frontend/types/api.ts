@@ -73,6 +73,14 @@ export interface ProjectBreakdown {
   tasks: TaskSuggestion[];
 }
 
+export interface ArchitectSuggestRequest {
+  title: string;
+  description: string | null;
+  goals: string[];
+  constraints: string[];
+  additional_context: string | null;
+}
+
 export interface ArchitectDraftResponse {
   session_id: string;
   draft: ProjectBreakdown;

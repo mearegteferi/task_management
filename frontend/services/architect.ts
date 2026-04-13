@@ -2,19 +2,16 @@ import api from '@/lib/api';
 import {
     ArchitectConfirmResponse,
     ArchitectDraftResponse,
+    ArchitectSuggestRequest,
 } from '@/types/api';
 
 export const architectService = {
     suggest: async (
-        title: string,
-        description: string
+        payload: ArchitectSuggestRequest
     ): Promise<ArchitectDraftResponse> => {
         const response = await api.post<ArchitectDraftResponse>(
             '/architect/suggest',
-            {
-                title,
-                description: description || null,
-            }
+            payload
         );
         return response.data;
     },

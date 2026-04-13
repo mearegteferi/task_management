@@ -5,11 +5,8 @@ from fastapi import HTTPException, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.architect.agent import (
-    deserialize_chat_history,
-    format_architect_provider_error,
-    get_architect_agent,
-)
+from app.api.v1.architect.agent import deserialize_chat_history, get_architect_executor
+from app.api.v1.architect.prompts import build_feedback_prompt, build_initial_prompt
 from app.api.v1.architect.schemas import (
     ArchitectChatRequest,
     ArchitectConfirmRequest,
@@ -21,7 +18,9 @@ from app.api.v1.projects.models import Project
 from app.api.v1.projects.schemas import ProjectResponse
 from app.api.v1.tasks.models import Task, TaskStatus
 from app.api.v1.tasks.schemas import TaskResponse
+from app.core.ai import AIExecutionError, FallbackAIExecutor
 from app.core.config import settings
+from app.core.observability import log_ai_event, sanitize_text
 from app.core.redis import clear_cache_pattern
 
 
@@ -40,46 +39,6 @@ class ArchitectService:
     def _owner_key(session_id: str) -> str:
         # Build the Redis key for the session owner.
         return f'architect:{session_id}:owner'
-
-    @staticmethod
-    def _build_initial_prompt(project_request: SuggestProjectRequest) -> str:
-        # Turn the first project request into an AI prompt.
-        lines = [
-            'Create a project breakdown from the following request.',
-            f'Title: {project_request.title}',
-        ]
-
-        if project_request.description:
-            lines.append(f'Description: {project_request.description}')
-        if project_request.goals:
-            lines.append('Goals:')
-            lines.extend(f'- {goal}' for goal in project_request.goals)
-        if project_request.constraints:
-            lines.append('Constraints:')
-            lines.extend(
-                f'- {constraint}' for constraint in project_request.constraints
-            )
-        if project_request.additional_context:
-            lines.append(f'Additional context: {project_request.additional_context}')
-
-        lines.append('Return a complete ProjectBreakdown.')
-        return '\n'.join(lines)
-
-    @staticmethod
-    def _build_feedback_prompt(
-        current_draft: ProjectBreakdown, feedback: ArchitectChatRequest
-    ) -> str:
-        # Turn draft feedback into a revision prompt for the AI.
-        return '\n'.join(
-            [
-                'Revise the current project breakdown using the feedback below.',
-                'Current draft:',
-                current_draft.model_dump_json(indent=2),
-                'Feedback:',
-                feedback.feedback,
-                'Return the full revised ProjectBreakdown.',
-            ]
-        )
 
     @staticmethod
     def _derive_project_priority(draft: ProjectBreakdown) -> int:
@@ -196,24 +155,34 @@ class ArchitectService:
 
     @staticmethod
     async def _run_agent(
-        prompt: str, message_history: list[object] | None = None
+        executor: FallbackAIExecutor[ProjectBreakdown],
+        prompt: str,
+        *,
+        message_history: list[object] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Any:
-        # Run the AI agent and normalize provider errors.
+        # Run the AI executor and normalize provider errors.
         try:
-            agent = get_architect_agent()
-            return await agent.run(prompt, message_history=message_history)
-        except RuntimeError as exc:
+            return await executor.run(
+                prompt,
+                message_history=message_history,
+                metadata=metadata,
+            )
+        except AIExecutionError as exc:
+            log_ai_event(
+                'Architect AI execution failed across all models',
+                workflow_name='architect',
+                level='error',
+                success=False,
+                failure_count=len(exc.failures),
+                failures=FallbackAIExecutor.format_failures(exc.failures),
+                **(metadata or {}),
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
             ) from exc
         except Exception as exc:
-            provider_error = format_architect_provider_error(exc)
-            if provider_error:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=provider_error,
-                ) from exc
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f'Architect agent failed: {exc}',
@@ -228,7 +197,27 @@ class ArchitectService:
     ) -> tuple[str, ProjectBreakdown]:
         # Create a new draft and store its session state.
         session_id = str(uuid.uuid4())
-        result = await cls._run_agent(cls._build_initial_prompt(project_request))
+        prompt = build_initial_prompt(project_request)
+        metadata = {
+            'user_id': str(user_id),
+            'session_id': session_id,
+            'project_title': sanitize_text(project_request.title, max_length=200),
+            'project_description': sanitize_text(project_request.description),
+        }
+        log_ai_event(
+            'Architect prompt generated',
+            workflow_name='architect',
+            prompt_type='suggest',
+            success=True,
+            goals=project_request.goals,
+            constraints=project_request.constraints,
+            **metadata,
+        )
+        result = await cls._run_agent(
+            get_architect_executor(),
+            prompt,
+            metadata=metadata,
+        )
         draft = result.output
         await cls._save_state(
             redis, user_id, session_id, draft, result.all_messages_json()
@@ -246,9 +235,25 @@ class ArchitectService:
         current_draft = await cls._get_draft(redis, user_id, feedback.session_id)
         history = await cls._get_history(redis, user_id, feedback.session_id)
 
+        prompt = build_feedback_prompt(current_draft, feedback)
+        metadata = {
+            'user_id': str(user_id),
+            'session_id': feedback.session_id,
+            'project_title': sanitize_text(current_draft.title, max_length=200),
+            'feedback_preview': sanitize_text(feedback.feedback),
+        }
+        log_ai_event(
+            'Architect prompt generated',
+            workflow_name='architect',
+            prompt_type='refine',
+            success=True,
+            **metadata,
+        )
         result = await cls._run_agent(
-            cls._build_feedback_prompt(current_draft, feedback),
+            get_architect_executor(),
+            prompt,
             message_history=history,
+            metadata=metadata,
         )
         draft = result.output
         await cls._save_state(

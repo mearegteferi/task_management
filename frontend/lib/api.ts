@@ -11,6 +11,9 @@ const api = axios.create({
 api.interceptors.request.use(
     (config) => {
         const { accessToken } = useAuthStore.getState();
+        if (!config.headers['X-Request-ID']) {
+            config.headers['X-Request-ID'] = crypto.randomUUID();
+        }
         if (accessToken) {
             config.headers.Authorization = `Bearer ${accessToken}`;
         }

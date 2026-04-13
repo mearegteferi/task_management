@@ -9,18 +9,30 @@ import { Label } from '@/components/ui/label';
 interface ArchitectSetupProps {
     title: string;
     description: string;
+    goals: string;
+    constraints: string;
+    additionalContext: string;
     isLoading: boolean;
     onTitleChange: (value: string) => void;
     onDescriptionChange: (value: string) => void;
+    onGoalsChange: (value: string) => void;
+    onConstraintsChange: (value: string) => void;
+    onAdditionalContextChange: (value: string) => void;
     onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
 export function ArchitectSetup({
     title,
     description,
+    goals,
+    constraints,
+    additionalContext,
     isLoading,
     onTitleChange,
     onDescriptionChange,
+    onGoalsChange,
+    onConstraintsChange,
+    onAdditionalContextChange,
     onSubmit,
 }: ArchitectSetupProps) {
     return (
@@ -54,7 +66,51 @@ export function ArchitectSetup({
                             value={description}
                             onChange={(event) => onDescriptionChange(event.target.value)}
                             placeholder="Describe the goal, scope, users, and constraints."
-                            rows={10}
+                            rows={7}
+                            className="min-h-40 w-full rounded-lg border border-input bg-input px-3 py-2 text-sm shadow-sm"
+                        />
+                    </div>
+
+                    <div className="grid gap-5 xl:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="architect-goals">Goals</Label>
+                            <textarea
+                                id="architect-goals"
+                                value={goals}
+                                onChange={(event) => onGoalsChange(event.target.value)}
+                                placeholder="One goal per line&#10;Improve visibility for managers&#10;Reduce planning overhead"
+                                rows={6}
+                                className="min-h-32 w-full rounded-lg border border-input bg-input px-3 py-2 text-sm shadow-sm"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                These are treated as strong requirements in the draft prompt.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="architect-constraints">Constraints</Label>
+                            <textarea
+                                id="architect-constraints"
+                                value={constraints}
+                                onChange={(event) => onConstraintsChange(event.target.value)}
+                                placeholder="One constraint per line&#10;Use the existing API&#10;Keep scope small for MVP"
+                                rows={6}
+                                className="min-h-32 w-full rounded-lg border border-input bg-input px-3 py-2 text-sm shadow-sm"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Add boundaries, deadlines, or implementation limits.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="architect-context">Additional context</Label>
+                        <textarea
+                            id="architect-context"
+                            value={additionalContext}
+                            onChange={(event) => onAdditionalContextChange(event.target.value)}
+                            placeholder="Optional team, delivery, or product context that should shape the plan."
+                            rows={4}
                             className="min-h-52 w-full rounded-lg border border-input bg-input px-3 py-2 text-sm shadow-sm"
                         />
                     </div>
